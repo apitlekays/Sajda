@@ -1,0 +1,25 @@
+export const REMINDERS = [
+    "SubhanAllah (Glory be to Allah)",
+    "Alhamdulillah (All praise is due to Allah)",
+    "La ilaha illa Allah (There is no deity but Allah)",
+    "Allahu Akbar (Allah is the Greatest)",
+    "Astaghfirullah (I seek forgiveness from Allah)",
+    "La hawla wa la quwwata illa billah (There is no power and no strength except with Allah)",
+    "SubhanAllah wa bihamdihi (Glory be to Allah and His is the praise)",
+    "SubhanAllah al-Azim (Glory be to Allah, the Magnificent)",
+    "Allahumma salli 'ala Muhammad (O Allah, send peace and blessings upon Muhammad)",
+    "HasbunAllah wa ni'mal wakil (Allah is Sufficient for us, and He is the Best Disposer of affairs)",
+    "Dhikr: SubhanAllah, Alhamdulillah, Allahu Akbar (33 times each)",
+    "Hadith: 'The best of you are those who learn the Quran and teach it.' (Bukhari)",
+    "Hadith: 'Smile is a charity.' (Tirmidhi)",
+    "Hadith: 'Cleanliness is half of faith.' (Muslim)",
+    "Hadith: 'None of you will have faith till he wishes for his (Muslim) brother what he likes for himself.' (Bukhari)",
+    "Hadith: 'The strong man is not the one who can overpower others. Rather, the strong man is the one who controls himself when he gets angry.' (Bukhari)",
+    "Remember to make Dua today.",
+    "Take a moment to reflect on your blessings.",
+    "Recite Ayatul Kursi for protection.",
+    "Seek knowledge from the cradle to the grave.",
+    "Kindness is a mark of faith."
+];
+
+export const FRIDAY_REMINDER = "It's Jumu'ah! Don't forget to read Surah Al-Kahf today.";
