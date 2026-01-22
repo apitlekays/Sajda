@@ -29,5 +29,10 @@ tauri-plugin-store = "2.4.2"
 reqwest = { version = "0.13.1", features = ["json"] }
 tauri-plugin-geolocation = "2.3.2"
 tauri-plugin-notification = "2.3.3"
+tauri-plugin-single-instance = "2.3.7"
+salah = "0.7.6"
+chrono = "0.4.43"
+tokio = "1.49.0"
+image = "0.25"
 
 

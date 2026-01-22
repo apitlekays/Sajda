@@ -19,9 +19,14 @@ export const AudioService = {
             // Fallback for now since we don't have files: Just try to play "chime.mp3"
 
             let fileName = "chime.mp3";
+            const { adhanSelection } = useSettingsStore.getState();
+
             if (mode === 'adhan') {
-                fileName = "adhan.mp3";
-                if (prayerName === 'fajr') fileName = "fajr.mp3";
+                if (prayerName === 'fajr' || prayerName === 'subuh') {
+                    fileName = "Mishary.mp3";
+                } else {
+                    fileName = `${adhanSelection}.mp3`;
+                }
             }
 
             console.log(`Attempting to play audio: ${fileName} for ${prayerName} (${mode})`);

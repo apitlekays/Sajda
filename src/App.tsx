@@ -12,6 +12,15 @@ function App() {
     // Load persisted data on mount
     loadRecords();
     loadSettings();
+
+    // Disable Right Click
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    document.addEventListener("contextmenu", handleContextMenu);
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
   }, []);
 
   return (

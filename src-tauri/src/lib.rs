@@ -1,4 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use tauri::Emitter;
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -11,8 +13,130 @@ fn update_tray_title(app: tauri::AppHandle, title: &str) {
     }
 }
 
+// Modules
+mod audio;
+mod jakim_api;
+mod prayer_engine;
+mod scheduler;
+mod settings;
+
+use prayer_engine::PrayerEngine;
+
+#[tauri::command]
+fn update_coordinates(app: tauri::AppHandle, lat: f64, lng: f64) {
+    let engine = app.state::<PrayerEngine>();
+    // 1. Update Coords Immediately (for fallback)
+    engine.update_coordinates(lat, lng);
+    println!("Rust: Coordinates updated to {}, {}", lat, lng);
+
+    // Trigger Refetch if needed (JAKIM API)
+    // ... existing logic ...
+    // Note: If Method != JAKIM, needs_refetch logic in engine might need tweaking?
+    // Actually needs_refetch is only for cache invalidation. If method is not JAKIM, we don't care about cache.
+    // So existing logic is fine, it just won't be used if set_method was called.
+    // BUT we should probably re-emit a schedule update here regardless?
+    // Force emit?
+    if let Some(schedule) = engine.get_today_schedule() {
+        let _ = app.emit("prayers-refreshed", &schedule);
+    }
+
+    // 2. Check/Fetch API
+    if engine.needs_refetch(lat, lng) {
+        println!("Rust: Spawning API fetch task...");
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            match jakim_api::fetch_jakim_times(lat, lng).await {
+                Ok(data) => {
+                    println!("Rust: API Success for Zone: {}", data.zone);
+                    // 1. Save to Disk
+                    let _ = jakim_api::save_cache(&handle, lat, lng, &data);
+
+                    // 2. Update In-Memory Cache manually
+                    let month_capitalized = format!(
+                        "{}{}",
+                        data.month.chars().next().unwrap_or_default().to_uppercase(),
+                        data.month
+                            .chars()
+                            .skip(1)
+                            .collect::<String>()
+                            .to_lowercase()
+                    );
+
+                    let mut map = std::collections::HashMap::new();
+                    for p in &data.prayers {
+                        let key = format!("{:02}-{}-{}", p.day, month_capitalized, data.year);
+                        //  println!("Rust: Debug Key Insert: {}", key); // Spammy
+                        map.insert(key, p.clone());
+                    }
+
+                    let month_hash = format!("{}-{}", month_capitalized, data.year);
+
+                    let new_cache = jakim_api::JakimCache {
+                        zone: data.zone,
+                        lat,
+                        lng,
+                        month_hash,
+                        prayers: map,
+                    };
+
+                    let engine = handle.state::<PrayerEngine>();
+                    engine.update_cache(new_cache);
+
+                    // 3. Notify Frontend to Refresh
+                    if let Some(schedule) = engine.get_today_schedule() {
+                        println!(
+                            "Rust: Got Schedule from Engine. Source: {}, Zone: {}",
+                            schedule.source, schedule.zone_name
+                        );
+                        let _ = handle.emit("prayers-refreshed", &schedule);
+                        println!("Rust: Emitted 'prayers-refreshed'");
+                    } else {
+                        println!("Rust: get_today_schedule returned None!");
+                    }
+                }
+                Err(e) => println!("Rust: API Error: {}", e),
+            }
+        });
+    }
+}
+
+#[tauri::command]
+fn update_calculation_method(app: tauri::AppHandle, method: String) {
+    let engine = app.state::<PrayerEngine>();
+    engine.set_method(&method);
+
+    // Force refresh frontend with new calculated times
+    if let Some(schedule) = engine.get_today_schedule() {
+        let _ = app.emit("prayers-refreshed", &schedule);
+    }
+}
+
+#[tauri::command]
+fn get_prayers(app: tauri::AppHandle) -> Option<prayer_engine::PrayerSchedule> {
+    let engine = app.state::<PrayerEngine>();
+    engine.get_today_schedule()
+}
+
+use tauri_plugin_notification::NotificationExt;
+
+#[tauri::command]
+async fn debug_delayed_notification(app: tauri::AppHandle, delay_millis: u64) {
+    println!("Rust: Waiting {}ms to send notification...", delay_millis);
+    tokio::time::sleep(std::time::Duration::from_millis(delay_millis)).await;
+
+    println!("Rust: Sending Debug Notification...");
+    let _ = app
+        .notification()
+        .builder()
+        .title("Test Notification (Delayed)")
+        .body("Click me! Did the window wake up?")
+        .sound("Glass")
+        .show();
+}
+
 use std::sync::Mutex;
 use std::time::Instant;
+use tauri::Listener;
 use tauri::Manager;
 use tauri_plugin_positioner::{Position, WindowExt};
 
@@ -21,20 +145,51 @@ struct TrayState {
     last_hide: Mutex<Option<Instant>>,
 }
 
-mod audio;
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            // Initialize Engine
+            app.manage(PrayerEngine::new(app.handle()));
+            // Start Ticker
+            scheduler::start_ticker(app.handle().clone());
+
+            // Initial Activation Policy Delay and Zones Fetch
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Fetch Zones
+                match jakim_api::fetch_zones().await {
+                    Ok(zones) => {
+                        let _ = jakim_api::save_zones_cache(&handle, &zones);
+                        let mut map = std::collections::HashMap::new();
+                        for z in zones {
+                            map.insert(z.jakim_code.clone(), z);
+                        }
+                        let engine = handle.state::<PrayerEngine>();
+                        engine.update_zones(map);
+                    }
+                    Err(e) => println!("Rust: Failed to fetch zones: {}", e),
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                #[cfg(target_os = "macos")]
+                let _ = handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                println!("Rust: Msg - Switched to Accessory Mode after startup");
+            });
 
             let _handle = app.handle().clone();
 
             // Initialize System Tray
+            // Load specific menubar icon (icon.png)
+            let icon_bytes = include_bytes!("../icons/icon.png");
+            let icon_img = image::load_from_memory(icon_bytes).expect("failed to decode tray icon");
+            let (width, height) = (icon_img.width(), icon_img.height());
+            let rgba = icon_img.into_rgba8().into_raw();
+            let tray_icon = tauri::image::Image::new(&rgba, width, height);
+
             let _tray = tauri::tray::TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
+                .icon_as_template(true)
                 .title("Sajda")
                 .on_tray_icon_event(move |tray, event| {
                     tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
@@ -51,18 +206,22 @@ pub fn run() {
                         let _ = window.move_window(Position::TrayCenter);
 
                         if window.is_visible().unwrap_or(false) {
+                            // HIDE LOGIC
                             let _ = window.hide();
+                            // Revert policy if hiding
+                            #[cfg(target_os = "macos")]
+                            let _ = tray
+                                .app_handle()
+                                .set_activation_policy(tauri::ActivationPolicy::Accessory);
+
                             *state.last_hide.lock().unwrap() = Some(Instant::now());
                         } else {
-                            // Fix Toggle Loop: If we JUST hid the window (via blur), don't show it again immediately
-                            let last_hide = *state.last_hide.lock().unwrap();
-                            if let Some(time) = last_hide {
-                                if time.elapsed().as_millis() < 250 {
-                                    // It was likely hidden by the blur event caused by clicking this tray icon.
-                                    // So we treat this as a "close" intent, and do nothing (it's already hidden).
-                                    return;
-                                }
-                            }
+                            // SHOW LOGIC
+                            // Temporarily Regular to allow focus
+                            #[cfg(target_os = "macos")]
+                            let _ = tray
+                                .app_handle()
+                                .set_activation_policy(tauri::ActivationPolicy::Regular);
 
                             let _ = window.show();
                             let _ = window.set_focus();
@@ -72,21 +231,85 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // LISTENERS FOR NOTIFICATION CLICKS
+            // Strategy: Switch to Regular -> Position -> Top -> Show -> Focus
+            let handle_clone = app.handle().clone();
+            app.listen_any("notification-click", move |_| {
+                println!("Rust: Notification Clicked (notification-click channel)");
+                if let Some(window) = handle_clone.get_webview_window("main") {
+                    #[cfg(target_os = "macos")]
+                    let _ = handle_clone.set_activation_policy(tauri::ActivationPolicy::Regular);
+
+                    let _ = window.move_window(Position::TrayCenter);
+                    let _ = window.set_always_on_top(true);
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            });
+
+            // Backup: Underscore variant
+            let handle_clone2 = app.handle().clone();
+            app.listen_any("notification_click", move |_| {
+                println!("Rust: Notification Clicked (notification_click channel)");
+                if let Some(window) = handle_clone2.get_webview_window("main") {
+                    #[cfg(target_os = "macos")]
+                    let _ = handle_clone2.set_activation_policy(tauri::ActivationPolicy::Regular);
+
+                    let _ = window.move_window(Position::TrayCenter);
+                    let _ = window.set_always_on_top(true);
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            });
+
+            // Backup: Standard plugin action channel
+            let handle_clone3 = app.handle().clone();
+            app.listen_any("plugin:notification:action", move |_| {
+                println!("Rust: Notification Action (plugin channel)");
+                if let Some(window) = handle_clone3.get_webview_window("main") {
+                    #[cfg(target_os = "macos")]
+                    let _ = handle_clone3.set_activation_policy(tauri::ActivationPolicy::Regular);
+
+                    let _ = window.move_window(Position::TrayCenter);
+                    let _ = window.set_always_on_top(true);
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            });
+
             Ok(())
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
-                if !focused {
+                if *focused {
+                    // CRITICAL FIX: If window receives focus ensure it is visible!
+                    #[cfg(target_os = "macos")]
+                    let _ = window
+                        .app_handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Regular);
+
+                    let _ = window.show();
+
                     let state = window.app_handle().state::<TrayState>();
-                    // Debounce: If we JUST showed the window, ignore the immediate blur (fixes "hides on mouse up")
+                    *state.last_show.lock().unwrap() = Some(Instant::now());
+                } else {
+                    let state = window.app_handle().state::<TrayState>();
+                    // Debounce
                     let last_show = *state.last_show.lock().unwrap();
                     if let Some(time) = last_show {
                         if time.elapsed().as_millis() < 250 {
                             return;
                         }
                     }
+
                     let _ = window.hide();
-                    // Record hide time for the tray toggle logic
+
+                    // REVERT TO ACCESSORY MODE ON HIDE
+                    #[cfg(target_os = "macos")]
+                    let _ = window
+                        .app_handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
+
                     *state.last_hide.lock().unwrap() = Some(Instant::now());
                 }
             }
@@ -100,6 +323,18 @@ pub fn run() {
         .plugin(tauri_plugin_geolocation::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let window = app.get_webview_window("main").expect("no main window");
+
+            // Activate as Regular App to steal focus
+            #[cfg(target_os = "macos")]
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+
+            let _ = window.move_window(Position::TrayCenter);
+            let _ = window.set_always_on_top(true);
+            let _ = window.show();
+            let _ = window.set_focus();
+        }))
         .manage(audio::AudioState::new())
         .manage(TrayState {
             last_show: Mutex::new(None),
@@ -108,8 +343,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             update_tray_title,
+            update_coordinates,
+            update_calculation_method,
+            get_prayers,
             audio::play_audio_file,
-            audio::stop_audio
+            audio::stop_audio,
+            debug_delayed_notification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

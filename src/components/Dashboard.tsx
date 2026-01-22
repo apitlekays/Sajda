@@ -1,18 +1,81 @@
 import { useEffect, useState } from "react";
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { onAction } from '@tauri-apps/plugin-notification';
 import { format } from "date-fns";
 import { cn } from "../lib/utils";
 import { usePrayerStore } from "../store/PrayerStore";
 import { useTrackerStore } from "../store/TrackerStore";
 import { useSettingsStore, AudioMode } from "../store/SettingsStore";
-import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation } from "lucide-react";
+import { useReminderStore } from "../store/ReminderStore";
+import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle } from "lucide-react";
 import { ZONE_MAPPING } from "../utils/ZoneData";
 
 export const Dashboard = () => {
     const { todayTimes, nextPrayer, fetchTimes, updateCountdown, loading, zone } = usePrayerStore();
     const { isChecked, togglePrayer } = useTrackerStore();
-    const { getMode, cycleAudioMode, remindersEnabled, toggleReminders } = useSettingsStore();
+    const { activeReminder, isModalOpen, closeModal } = useReminderStore();
+    const { getMode, cycleAudioMode,
+        remindersEnabled, toggleReminders,
+        reminderTimes, addReminderTime, removeReminderTime,
+        alkahfEnabled, toggleAlKahf,
+        adhanSelection, setAdhanSelection,
+        calculationMethod, setCalculationMethod
+    } = useSettingsStore();
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [playingPreview, setPlayingPreview] = useState<string | null>(null);
+    const [newReminderTime, setNewReminderTime] = useState("");
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+
+    // Prevent initial transition flash by deferring animation release
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsMounted(true);
+        }, 100); // 100ms delay to ensure initial paint is stable
+        return () => clearTimeout(timer);
+    }, []);
+
+    // ... (rest of code)
+
+    // ...
+
+
+    useEffect(() => {
+        // Request permission immediately on startup
+        import("../utils/ReminderService").then(async ({ requestNotificationPermission }) => {
+            const granted = await requestNotificationPermission();
+            setPermissionDenied(!granted);
+        });
+    }, []);
+
+    // Listen for Notification Clicks (Actions)
+    useEffect(() => {
+        let unlisten: any = undefined;
+
+        const setupListener = async () => {
+            console.log("Setting up notification listener...");
+            unlisten = await onAction(async (notification) => {
+                console.log('Notification clicked', notification);
+
+                const win = getCurrentWindow();
+                await win.unminimize();
+                await win.show();
+                await win.setFocus();
+            });
+        };
+
+        setupListener();
+
+        // Cleanup
+        return () => {
+            if (typeof unlisten === 'function') {
+                unlisten();
+            } else if (unlisten && typeof unlisten.unlisten === 'function') {
+                unlisten.unlisten();
+            }
+        };
+    }, []);
 
     // 1. Initial Fetch
     useEffect(() => {
@@ -27,16 +90,7 @@ export const Dashboard = () => {
         return () => clearInterval(interval);
     }, [updateCountdown]);
 
-    // 3. Reminder Service
-    useEffect(() => {
-        import("../utils/ReminderService").then(({ startReminderService, stopReminderService }) => {
-            if (remindersEnabled) {
-                startReminderService();
-            } else {
-                stopReminderService();
-            }
-        });
-    }, [remindersEnabled]);
+
 
     const getOrdinal = (n: number) => {
         const s = ["th", "st", "nd", "rd"];
@@ -56,7 +110,7 @@ export const Dashboard = () => {
             const monthName = months[m - 1] || "";
             return (
                 <>
-                    {d}<sup className="text-[0.6em]">{getOrdinal(d)}</sup> {monthName} {y}
+                    {d} {monthName} {y}
                 </>
             );
         } catch (e) {
@@ -77,10 +131,13 @@ export const Dashboard = () => {
         );
     };
 
+    // Check if Friday for Jumaat naming
+    const isFriday = new Date().getDay() === 5;
+
     const prayerMap: Record<string, string> = {
         fajr: "Subuh",
         syuruk: "Syuruk",
-        dhuhr: "Zohor",
+        dhuhr: isFriday ? "Jumaat" : "Zohor",
         asr: "Asar",
         maghrib: "Maghrib",
         isha: "Isyak"
@@ -108,7 +165,8 @@ export const Dashboard = () => {
             {/* Settings Drawer */}
             <div
                 className={cn(
-                    "fixed inset-0 z-50 bg-background/95 backdrop-blur-xl transition-transform duration-300 ease-in-out flex flex-col p-6 space-y-6",
+                    "fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex flex-col p-6 space-y-6",
+                    isMounted ? "transition-transform duration-300 ease-in-out" : "duration-0",
                     isSettingsOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >
@@ -119,37 +177,13 @@ export const Dashboard = () => {
                     </button>
                 </div>
 
-                <div className="space-y-4">
-                    <p className="text-muted-foreground">Settings content will go here in V0.2.</p>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => {
-                                import("../utils/AudioService").then(({ AudioService }) => {
-                                    AudioService.playAthan("fajr");
-                                });
-                            }}
-                            className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
-                        >
-                            Test Audio (Fajr)
-                        </button>
-                        <button
-                            onClick={() => {
-                                import("../utils/AudioService").then(({ AudioService }) => {
-                                    AudioService.stop();
-                                });
-                            }}
-                            className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
-                        >
-                            Stop
-                        </button>
-                    </div>
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
 
-                    <div className="h-px bg-border my-2" />
 
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col">
                             <span className="text-sm font-medium">Daily Reminders</span>
-                            <span className="text-[10px] text-muted-foreground leading-tight">9am & 9pm (+ Al-Kahf on Fridays)</span>
+                            <span className="text-[10px] text-muted-foreground leading-tight">Hadith & Zikr notifications</span>
                         </div>
                         <button
                             onClick={toggleReminders}
@@ -164,6 +198,180 @@ export const Dashboard = () => {
                             )} />
                         </button>
                     </div>
+
+                    {/* Permission Warning */}
+                    {remindersEnabled && permissionDenied && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <div className="text-[10px] text-muted-foreground">
+                                <p className="font-semibold text-amber-500 mb-1">Notifications Denied</p>
+                                <p className="leading-relaxed">Enable in <span className="font-mono bg-muted/50 px-1 rounded">System Settings &gt; Notifications &gt; Sajda</span></p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Customizable Times List */}
+                    {remindersEnabled && (
+                        <div className="space-y-2 pt-2">
+                            <div className="flex flex-wrap gap-2">
+                                {reminderTimes.map((time) => (
+                                    <div key={time} className="flex items-center bg-muted/40 px-2 py-1 rounded text-xs gap-2">
+                                        <Clock className="w-3 h-3 opacity-50" />
+                                        <span>{time}</span>
+                                        <button
+                                            onClick={() => removeReminderTime(time)}
+                                            className="hover:text-destructive transition-colors"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Add Time Input */}
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="time"
+                                    value={newReminderTime}
+                                    className="px-2 py-1 text-xs rounded border bg-background/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                                    onChange={(e) => setNewReminderTime(e.target.value)}
+                                />
+                                <button
+                                    onClick={() => {
+                                        if (newReminderTime) {
+                                            addReminderTime(newReminderTime);
+                                            setNewReminderTime("");
+                                        }
+                                    }}
+                                    disabled={!newReminderTime}
+                                    className="p-1 rounded bg-primary text-primary-foreground disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                                >
+                                    <Plus className="w-3 h-3" />
+                                </button>
+                                <span className="text-[10px] text-muted-foreground">Select time to add</span>
+                            </div>
+                        </div>
+
+                    )}
+
+
+                    <div className="h-px bg-border my-2" />
+
+                    {/* Jumu'ah Reminders */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <span className="text-sm font-medium">Jumu'ah Reminder</span>
+                            <span className="text-[10px] text-muted-foreground leading-tight">Surah Al-Kahf at Zuhur/Jumaat</span>
+                        </div>
+                        <button
+                            onClick={toggleAlKahf}
+                            className={cn(
+                                "w-9 h-5 rounded-full transition-colors relative",
+                                alkahfEnabled ? "bg-emerald-500" : "bg-muted"
+                            )}
+                        >
+                            <div className={cn(
+                                "absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200",
+                                alkahfEnabled ? "left-5" : "left-1"
+                            )} />
+                        </button>
+                    </div>
+
+                    <div className="h-px bg-border my-2" />
+
+                    <div className="space-y-3">
+                        <span className="text-sm font-medium">Adhan Voice</span>
+                        <div className="grid grid-cols-2 gap-2">
+                            {(['Nasser', 'Ahmed'] as const).map((voice) => (
+                                <div
+                                    key={voice}
+                                    onClick={() => setAdhanSelection(voice)}
+                                    className={cn(
+                                        "relative flex flex-col items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200",
+                                        adhanSelection === voice
+                                            ? "border-primary bg-primary/5 text-primary"
+                                            : "border-muted/40 hover:border-muted-foreground/30 hover:bg-muted/30 text-muted-foreground"
+                                    )}
+                                >
+                                    <span className="text-sm font-semibold">{voice}</span>
+
+                                    {/* Preview Button */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+
+                                            // Toggle Logic
+                                            if (playingPreview === voice) {
+                                                // Stop
+                                                import("../utils/AudioService").then(({ AudioService }) => {
+                                                    AudioService.stop();
+                                                });
+                                                setPlayingPreview(null);
+                                            } else {
+                                                // Play
+                                                import("@tauri-apps/api/core").then(({ invoke }) => {
+                                                    import("@tauri-apps/api/path").then(({ resolveResource }) => {
+                                                        resolveResource(`resources/audio/${voice}.mp3`).then(path => {
+                                                            invoke("play_audio_file", { filePath: path });
+                                                        });
+                                                    });
+                                                });
+                                                setPlayingPreview(voice);
+                                            }
+                                        }}
+                                        className="mt-2 p-1 rounded-full hover:bg-background/50 transition-colors"
+                                        title={playingPreview === voice ? "Stop" : "Preview"}
+                                    >
+                                        {playingPreview === voice ? (
+                                            <Volume2 className="w-4 h-4 text-primary animate-pulse" />
+                                        ) : (
+                                            <Play className="w-4 h-4 fill-current opacity-70" />
+                                        )}
+                                    </button>
+
+                                    {/* Active Check */}
+                                    {adhanSelection === voice && (
+                                        <div className="absolute top-2 right-2 bg-emerald-500 rounded-full p-0.5">
+                                            <Check className="w-3 h-3 text-white stroke-[3]" />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground text-center pt-1">
+                            *Subuh always uses Mishary
+                        </p>
+                    </div>
+
+                    <div className="h-px bg-border my-2" />
+
+                    {/* Calculation Method */}
+                    <div className="space-y-3">
+                        <span className="text-sm font-medium">Calculation Method</span>
+                        <select
+                            value={calculationMethod}
+                            onChange={(e) => setCalculationMethod(e.target.value)}
+                            className="w-full p-2 rounded-md bg-muted/40 border border-muted-foreground/20 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                            <option value="JAKIM">JAKIM (Malaysia)</option>
+                            <option value="Singapore">MUIS (Singapore)</option>
+                            <option value="MWL">Muslim World League</option>
+                            <option value="ISNA">ISNA (North America)</option>
+                            <option value="Makkah">Umm Al-Qura (Makkah)</option>
+                            <option value="Egypt">Egyptian General Authority</option>
+                            <option value="Karachi">Karachi (Hanfi)</option>
+                            <option value="Tehran">Tehran (Geophysics)</option>
+                            <option value="Gulf">Gulf (Dubai)</option>
+                            <option value="Kuwait">Kuwait</option>
+                            <option value="Qatar">Qatar</option>
+                        </select>
+                        <p className="text-[10px] text-muted-foreground pt-1">
+                            Use "JAKIM" for official Malaysian times (API). Others use local calculation execution.
+                        </p>
+                    </div>
+
+                    <div className="h-px bg-border my-2" />
+
                 </div>
             </div>
 
@@ -189,7 +397,7 @@ export const Dashboard = () => {
             {/* Header / Date */}
             <div className="text-center space-y-1 font-buda mt-6">
                 <h2 className="text-xl font-bold text-foreground tracking-wide leading-tight">
-                    {todayTimes ? renderHijri(todayTimes.hijri) : "..."}
+                    {todayTimes ? renderHijri(todayTimes.hijri || "") : "..."}
                 </h2>
                 <p className="text-xs text-muted-foreground font-semibold uppercase tracking-widest opacity-90">
                     {renderGregorian()}
@@ -240,6 +448,7 @@ export const Dashboard = () => {
                         }
                     }
 
+
                     return (
                         <div
                             key={p}
@@ -250,13 +459,17 @@ export const Dashboard = () => {
                                     : "bg-muted/20 text-muted-foreground hover:bg-muted/40"
                             )}
                         >
-                            {/* Left: Audio Toggle */}
-                            <button
-                                onClick={(e) => { e.stopPropagation(); cycleAudioMode(p); }}
-                                className="p-1.5 hover:bg-background/50 rounded-full transition-colors"
-                            >
-                                {getAudioIcon(audioMode)}
-                            </button>
+                            {/* Left: Audio Toggle (Hidden for Syuruk) */}
+                            {p !== "syuruk" ? (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); cycleAudioMode(p); }}
+                                    className="p-1.5 hover:bg-background/50 rounded-full transition-colors"
+                                >
+                                    {getAudioIcon(audioMode)}
+                                </button>
+                            ) : (
+                                <div className="w-7"></div> // Spacer
+                            )}
 
                             {/* Center: Name & Time */}
                             <div className="flex-1 px-3 flex items-center justify-between">
@@ -264,28 +477,82 @@ export const Dashboard = () => {
                                 <span>{displayTime}</span>
                             </div>
 
-                            {/* Right: Circular Checkbox */}
-                            <button
-                                onClick={() => togglePrayer(p)}
-                                className={cn(
-                                    "w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-200",
-                                    checked
-                                        ? "bg-emerald-500 border-emerald-500 text-white"
-                                        : "border-muted-foreground/30 hover:border-primary/50 bg-background/50"
-                                )}
-                            >
-                                {checked && <Check className="w-3 h-3 stroke-[3]" />}
-                            </button>
+                            {/* Right: Circular Checkbox (Hidden for Syuruk) */}
+                            {p !== "syuruk" ? (
+                                <button
+                                    onClick={() => togglePrayer(p)}
+                                    className={cn(
+                                        "w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-200",
+                                        checked
+                                            ? "bg-emerald-500 border-emerald-500 text-white"
+                                            : "border-muted-foreground/30 hover:border-primary/50 bg-background/50"
+                                    )}
+                                >
+                                    {checked && <Check className="w-3 h-3 stroke-[3]" />}
+                                </button>
+                            ) : (
+                                <div className="w-5"></div> // Spacer
+                            )}
                         </div>
                     )
                 })}
             </div>
 
+            {/* Reminder Modal Overlay */}
+            {
+                isModalOpen && activeReminder && (
+                    <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-card w-full max-w-sm rounded-xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-4 border-b bg-muted/20">
+                                <div className="flex items-center gap-2 text-primary">
+                                    {activeReminder.type === 'hadith' ? <BookOpen className="w-4 h-4" /> : <Quote className="w-4 h-4" />}
+                                    <span className="font-semibold text-sm">{activeReminder.title}</span>
+                                </div>
+                                <button onClick={closeModal} className="hover:bg-destructive/10 hover:text-destructive p-1 rounded transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-5 overflow-y-auto space-y-4">
+                                {/* Arabic (Dua) */}
+                                {activeReminder.arabic && (
+                                    <div className="bg-primary/5 p-4 rounded-lg border border-primary/10">
+                                        <p className="text-right font-traditional text-xl leading-relaxed font-semibold dir-rtl">
+                                            {activeReminder.arabic}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Main Text */}
+                                <div className="prose prose-sm dark:prose-invert">
+                                    <p className="whitespace-pre-wrap leading-relaxed opacity-90">
+                                        {activeReminder.body}
+                                    </p>
+                                </div>
+
+                                {/* Metadata / Source */}
+                                <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                                    {activeReminder.description && (
+                                        <p className="italic opacity-80">{activeReminder.description}</p>
+                                    )}
+                                    {activeReminder.source && (
+                                        <p className="font-mono text-[10px] uppercase tracking-wider opacity-70">
+                                            Source: {activeReminder.source}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
             {/* Footer / Location */}
             <div className="mt-auto py-2 flex items-center justify-center gap-1 text-[10px] text-muted-foreground font-medium uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity">
                 <Navigation className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate max-w-[200px]">{ZONE_MAPPING[zone] || zone}</span>
+                <span className="truncate max-w-[200px]">{todayTimes?.zone_name || ZONE_MAPPING[zone] || zone}</span>
             </div>
-        </div>
+        </div >
     );
 };
