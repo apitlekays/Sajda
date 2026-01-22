@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/mapimlogo.webp" alt="Sajda Logo" width="120" height="auto" />
+  <img src="public/128x128@2x.png" alt="Sajda Logo" width="128" height="128" />
   <h1>Sajda</h1>
   <p><strong>Modern Islamic Prayer Times & Reminder App for macOS</strong></p>
 
