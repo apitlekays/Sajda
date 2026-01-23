@@ -38,6 +38,10 @@ Drag the `.app` bundle to your Applications folder.
 - **State Management**: Zustand
 - **Data Source**: WaktuSolat.app API (JAKIM), Salah (Calculation)
 
+## 👤 Author
+
+Developed with ❤️ by **Hafiz Hanif, PhD.**
+
 ## 📄 License
 
 MIT

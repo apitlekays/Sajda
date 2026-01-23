@@ -7,7 +7,7 @@ import { usePrayerStore } from "../store/PrayerStore";
 import { useTrackerStore } from "../store/TrackerStore";
 import { useSettingsStore, AudioMode } from "../store/SettingsStore";
 import { useReminderStore } from "../store/ReminderStore";
-import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle } from "lucide-react";
+import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart } from "lucide-react";
 import { ZONE_MAPPING } from "../utils/ZoneData";
 
 export const Dashboard = () => {
@@ -407,6 +407,13 @@ export const Dashboard = () => {
 
                     <div className="h-px bg-border my-2" />
 
+                </div>
+
+                {/* Credit Footer */}
+                <div className="pt-4 text-center text-[10px] text-muted-foreground/60">
+                    <p className="flex items-center justify-center gap-1">
+                        Developed with <Heart className="w-3 h-3 text-red-400 fill-red-400" /> by Hafiz Hanif, PhD.
+                    </p>
                 </div>
             </div>
 
