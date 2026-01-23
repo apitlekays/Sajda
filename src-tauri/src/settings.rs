@@ -11,6 +11,8 @@ pub struct Settings {
     pub reminder_times: Option<Vec<String>>,
     pub alkahf_enabled: Option<bool>,
     pub calculation_method: Option<String>,
+    pub reminders_enabled: Option<bool>,
+    pub random_reminders: Option<bool>,
 }
 
 impl Settings {
@@ -42,6 +44,14 @@ impl Settings {
             .clone()
             .unwrap_or_else(|| "Nasser".to_string())
     }
+
+    pub fn is_reminders_enabled(&self) -> bool {
+        self.reminders_enabled.unwrap_or(true)
+    }
+
+    pub fn is_random_reminders(&self) -> bool {
+        self.random_reminders.unwrap_or(true)
+    }
 }
 
 pub fn load_settings(app: &AppHandle) -> Settings {
@@ -66,5 +76,7 @@ pub fn load_settings(app: &AppHandle) -> Settings {
         reminder_times: Some(vec!["09:00".to_string(), "21:00".to_string()]),
         alkahf_enabled: Some(true),
         calculation_method: Some("JAKIM".to_string()),
+        reminders_enabled: Some(true),
+        random_reminders: Some(true),
     }
 }

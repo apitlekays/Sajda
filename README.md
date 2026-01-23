@@ -17,13 +17,15 @@
 ## ✨ Features
 
 - **Accurate Prayer Times**: Directly sourced from JAKIM (Malaysia) or calculated locally (Global).
-- **Menu Bar Integration**: Discreetly lives in your menu bar with "Next Prayer" countdown.
+- **Menu Bar Integration**: Discreetly lives in your menu bar with "Next Prayer" countdown (Malay labels, Jumaat-aware).
 - **Rich Dashboard**: Beautiful, glassmorphic UI via the system tray.
-- **Audio Adhan**: Automated Adhan playback (Mishary, Nasser, Ahmed) for prayer times.
-- **Daily Reminders**: Automated notification alerts for Zikr and Hadith.
+- **Audio Adhan**: Automated Adhan playback (Mishary, Nasser, Ahmed) at prayer times.
+- **Daily Reminders**: Hadith & Dua notifications with full-content modal — supports random (3/day) or custom scheduled times.
+- **Jumu'ah Reminder**: Surah Al-Kahf reading reminder every Friday.
 - **Hijri Calendar**: Integrated Islamic calendar display.
 - **Native Performance**: Built on Tauri v2 for an ultra-lightweight footprint (~5MB).
 - **Auto-Location**: Automatically detects your zone for prayer times.
+- **Multiple Calculation Methods**: JAKIM, MUIS, MWL, ISNA, Umm Al-Qura, and more.
 
 ## 🚀 Installation
 

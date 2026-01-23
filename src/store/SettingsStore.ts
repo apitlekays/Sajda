@@ -19,6 +19,9 @@ interface SettingsState {
     remindersEnabled: boolean;
     toggleReminders: () => Promise<void>;
 
+    randomReminders: boolean;
+    toggleRandomReminders: () => Promise<void>;
+
     reminderTimes: string[]; // ["09:00", "21:00"]
     addReminderTime: (time: string) => Promise<void>;
     removeReminderTime: (time: string) => Promise<void>;
@@ -44,6 +47,7 @@ const NEXT_MODE: Record<AudioMode, AudioMode> = {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
     audioSettings: {},
     remindersEnabled: true,
+    randomReminders: true,
     reminderTimes: ["09:00", "21:00"],
     alkahfEnabled: true,
 
@@ -56,6 +60,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             const store = await load(STORE_PATH);
             const val = await store.get<Record<string, AudioMode>>('audio_settings');
             const remindersVal = await store.get<boolean>('reminders_enabled');
+            const randomRemindersVal = await store.get<boolean>('random_reminders');
             const reminderTimesVal = await store.get<string[]>('reminder_times');
             const alkahfVal = await store.get<boolean>('alkahf_enabled');
             const adhanVal = await store.get<AdhanVoice>('adhan_selection');
@@ -71,6 +76,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
                     isha: 'adhan'
                 },
                 remindersEnabled: remindersVal !== null ? remindersVal : true, // Default ON
+                randomReminders: randomRemindersVal !== null ? randomRemindersVal : true,
                 reminderTimes: reminderTimesVal || ["09:00", "21:00"],
                 alkahfEnabled: alkahfVal !== null ? alkahfVal : true,
                 adhanSelection: adhanVal || 'Nasser', // Default to Nasser
@@ -123,6 +129,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save reminders settings:", e);
+        }
+    },
+
+    toggleRandomReminders: async () => {
+        const { randomReminders } = get();
+        const newState = !randomReminders;
+        set({ randomReminders: newState });
+
+        try {
+            const store = await load(STORE_PATH);
+            await store.set('random_reminders', newState);
+            await store.save();
+        } catch (e) {
+            console.error("Failed to save random reminders setting:", e);
         }
     },
 

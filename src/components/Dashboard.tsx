@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { onAction } from '@tauri-apps/plugin-notification';
+import { listen } from '@tauri-apps/api/event';
+import { isPermissionGranted, sendNotification } from '@tauri-apps/plugin-notification';
 import { format } from "date-fns";
 import { cn } from "../lib/utils";
 import { usePrayerStore } from "../store/PrayerStore";
@@ -13,9 +13,10 @@ import { ZONE_MAPPING } from "../utils/ZoneData";
 export const Dashboard = () => {
     const { todayTimes, nextPrayer, fetchTimes, updateCountdown, loading, zone } = usePrayerStore();
     const { isChecked, togglePrayer } = useTrackerStore();
-    const { activeReminder, isModalOpen, closeModal } = useReminderStore();
+    const { activeReminder, isModalOpen, closeModal, openModal, triggerNewReminder } = useReminderStore();
     const { getMode, cycleAudioMode,
         remindersEnabled, toggleReminders,
+        randomReminders, toggleRandomReminders,
         reminderTimes, addReminderTime, removeReminderTime,
         alkahfEnabled, toggleAlKahf,
         adhanSelection, setAdhanSelection,
@@ -49,33 +50,41 @@ export const Dashboard = () => {
         });
     }, []);
 
-    // Listen for Notification Clicks (Actions)
+    // Listen for reminder triggers from Rust scheduler
     useEffect(() => {
-        let unlisten: any = undefined;
+        let unlisten: (() => void) | undefined;
 
-        const setupListener = async () => {
-            console.log("Setting up notification listener...");
-            unlisten = await onAction(async (notification) => {
-                console.log('Notification clicked', notification);
+        const setup = async () => {
+            unlisten = await listen<string>("reminder-trigger", async () => {
+                try {
+                    const reminder = await triggerNewReminder();
 
-                const win = getCurrentWindow();
-                await win.unminimize();
-                await win.show();
-                await win.setFocus();
+                    // Send notification as visual/audio alert
+                    const hasPermission = await isPermissionGranted();
+                    if (hasPermission) {
+                        const MAX_BODY = 100;
+                        let body = reminder.body;
+                        if (body.length > MAX_BODY) {
+                            body = body.substring(0, MAX_BODY).trim() + "...";
+                        }
+
+                        sendNotification({
+                            title: reminder.title,
+                            body,
+                        });
+                    }
+
+                    // Open modal directly (macOS doesn't support notification click events)
+                    setTimeout(() => openModal(), 500);
+                } catch (err) {
+                    console.error("Failed to process reminder trigger:", err);
+                }
             });
         };
 
-        setupListener();
-
-        // Cleanup
-        return () => {
-            if (typeof unlisten === 'function') {
-                unlisten();
-            } else if (unlisten && typeof unlisten.unlisten === 'function') {
-                unlisten.unlisten();
-            }
-        };
-    }, []);
+        setup();
+        return () => { if (unlisten) unlisten(); };
+    }, [triggerNewReminder, openModal]);
 
     // 1. Initial Fetch
     useEffect(() => {
@@ -199,59 +208,85 @@ export const Dashboard = () => {
                         </button>
                     </div>
 
-                    {/* Permission Warning */}
-                    {remindersEnabled && permissionDenied && (
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex gap-2">
-                            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                            <div className="text-[10px] text-muted-foreground">
-                                <p className="font-semibold text-amber-500 mb-1">Notifications Denied</p>
-                                <p className="leading-relaxed">Enable in <span className="font-mono bg-muted/50 px-1 rounded">System Settings &gt; Notifications &gt; Sajda</span></p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Customizable Times List */}
+                    {/* Daily Reminder Sub-options */}
                     {remindersEnabled && (
-                        <div className="space-y-2 pt-2">
-                            <div className="flex flex-wrap gap-2">
-                                {reminderTimes.map((time) => (
-                                    <div key={time} className="flex items-center bg-muted/40 px-2 py-1 rounded text-xs gap-2">
-                                        <Clock className="w-3 h-3 opacity-50" />
-                                        <span>{time}</span>
-                                        <button
-                                            onClick={() => removeReminderTime(time)}
-                                            className="hover:text-destructive transition-colors"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
+                        <div className="ml-1 pl-3 border-l-2 border-primary/20 space-y-3">
+                            {/* Permission Warning */}
+                            {permissionDenied && (
+                                <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                                    <div className="text-[10px] text-muted-foreground">
+                                        <p className="font-semibold text-amber-500 mb-1">Notifications Denied</p>
+                                        <p className="leading-relaxed">Enable in <span className="font-mono bg-muted/50 px-1 rounded">System Settings &gt; Notifications &gt; Sajda</span></p>
                                     </div>
-                                ))}
-                            </div>
+                                </div>
+                            )}
 
-                            {/* Add Time Input */}
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="time"
-                                    value={newReminderTime}
-                                    className="px-2 py-1 text-xs rounded border bg-background/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                                    onChange={(e) => setNewReminderTime(e.target.value)}
-                                />
+                            {/* Random Times Toggle */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-medium">Random times</span>
+                                    <span className="text-[10px] text-muted-foreground leading-tight">
+                                        3 reminders at varied times daily
+                                    </span>
+                                </div>
                                 <button
-                                    onClick={() => {
-                                        if (newReminderTime) {
-                                            addReminderTime(newReminderTime);
-                                            setNewReminderTime("");
-                                        }
-                                    }}
-                                    disabled={!newReminderTime}
-                                    className="p-1 rounded bg-primary text-primary-foreground disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                                    onClick={toggleRandomReminders}
+                                    className={cn(
+                                        "w-9 h-5 rounded-full transition-colors relative",
+                                        randomReminders ? "bg-primary" : "bg-muted"
+                                    )}
                                 >
-                                    <Plus className="w-3 h-3" />
+                                    <div className={cn(
+                                        "absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200",
+                                        randomReminders ? "left-5" : "left-1"
+                                    )} />
                                 </button>
-                                <span className="text-[10px] text-muted-foreground">Select time to add</span>
                             </div>
-                        </div>
 
+                            {/* Custom Times (only shown when NOT random) */}
+                            {!randomReminders && (
+                                <div className="space-y-2">
+                                    <div className="flex flex-wrap gap-2">
+                                        {reminderTimes.map((time) => (
+                                            <div key={time} className="flex items-center bg-muted/40 px-2 py-1 rounded text-xs gap-2">
+                                                <Clock className="w-3 h-3 opacity-50" />
+                                                <span>{time}</span>
+                                                <button
+                                                    onClick={() => removeReminderTime(time)}
+                                                    className="hover:text-destructive transition-colors"
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Add Time Input */}
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="time"
+                                            value={newReminderTime}
+                                            className="px-2 py-1 text-xs rounded border bg-background/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                                            onChange={(e) => setNewReminderTime(e.target.value)}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (newReminderTime) {
+                                                    addReminderTime(newReminderTime);
+                                                    setNewReminderTime("");
+                                                }
+                                            }}
+                                            disabled={!newReminderTime}
+                                            className="p-1 rounded bg-primary text-primary-foreground disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                        </button>
+                                        <span className="text-[10px] text-muted-foreground">Select time to add</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
 
 
@@ -390,7 +425,26 @@ export const Dashboard = () => {
                 <img
                     src="/mapimlogo.webp"
                     alt="Logo"
-                    className="w-full h-auto drop-shadow-md opacity-90 hover:opacity-100 transition-opacity rounded-b-md"
+                    className="w-full h-auto drop-shadow-md opacity-90 hover:opacity-100 transition-opacity rounded-b-md cursor-pointer"
+                    onClick={() => {
+                        setTimeout(async () => {
+                            try {
+                                const reminder = await triggerNewReminder();
+                                const hasPermission = await isPermissionGranted();
+                                if (hasPermission) {
+                                    const MAX_BODY = 100;
+                                    let body = reminder.body;
+                                    if (body.length > MAX_BODY) {
+                                        body = body.substring(0, MAX_BODY).trim() + "...";
+                                    }
+                                    sendNotification({ title: reminder.title, body });
+                                }
+                                setTimeout(() => openModal(), 500);
+                            } catch (err) {
+                                console.error("Easter egg reminder failed:", err);
+                            }
+                        }, 10000);
+                    }}
                 />
             </div>
 
