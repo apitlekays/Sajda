@@ -117,6 +117,11 @@ fn get_prayers(app: tauri::AppHandle) -> Option<prayer_engine::PrayerSchedule> {
     engine.get_today_schedule()
 }
 
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 use tauri_plugin_notification::NotificationExt;
 
 #[tauri::command]
@@ -200,6 +205,15 @@ pub fn run() {
                         ..
                     } = event
                     {
+                        // Stop any playing athan/audio immediately
+                        let audio = tray.app_handle().state::<audio::AudioState>();
+                        if let Ok(sink) = audio.sink.lock() {
+                            if !sink.empty() {
+                                sink.stop();
+                                println!("Rust: Audio stopped via tray click");
+                            }
+                        }
+
                         let window = tray.app_handle().get_webview_window("main").unwrap();
                         let state = tray.app_handle().state::<TrayState>();
 
@@ -346,6 +360,7 @@ pub fn run() {
             update_coordinates,
             update_calculation_method,
             get_prayers,
+            quit_app,
             audio::play_audio_file,
             audio::stop_audio,
             debug_delayed_notification

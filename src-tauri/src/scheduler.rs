@@ -3,8 +3,7 @@ use crate::settings;
 use chrono::{Datelike, Timelike};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_notification::NotificationExt; // For notifications
-use tauri_plugin_positioner::{Position, WindowExt};
+use tauri_plugin_notification::NotificationExt;
 use tokio::time::interval;
 
 /// Generate 3 deterministic reminder times for a given date.
@@ -130,15 +129,6 @@ pub fn start_ticker(app: AppHandle) {
                             }
 
                             let _ = app.notification().builder().title(title).body(body).show();
-
-                            // C. Wake Window (If notification shown)
-                            if let Some(window) = app.get_webview_window("main") {
-                                #[cfg(target_os = "macos")]
-                                let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
-                                let _ = window.move_window(Position::TrayCenter);
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
                         }
 
                         // D. Audio

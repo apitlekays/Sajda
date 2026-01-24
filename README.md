@@ -14,29 +14,60 @@
 
 **Sajda** is a beautiful, unobtrusive menu bar application designed to keep you connected with your prayers. Built with the performance of Rust and the flexibility of React, it leverages the official JAKIM API for accurate Malaysian prayer times, optionally falling back to calculation methods for global support.
 
+<div align="center">
+  <img src="public/Sajda.png" alt="Sajda App Screenshot" width="500" />
+</div>
+
 ## ✨ Features
 
-- **Accurate Prayer Times**: Directly sourced from JAKIM (Malaysia) or calculated locally (Global).
-- **Menu Bar Integration**: Discreetly lives in your menu bar with "Next Prayer" countdown (Malay labels, Jumaat-aware).
-- **Rich Dashboard**: Beautiful, glassmorphic UI via the system tray.
-- **Audio Adhan**: Automated Adhan playback (Mishary, Nasser, Ahmed) at prayer times.
-- **Daily Reminders**: Hadith & Dua notifications with full-content modal — supports random (3/day) or custom scheduled times.
-- **Jumu'ah Reminder**: Surah Al-Kahf reading reminder every Friday.
-- **Hijri Calendar**: Integrated Islamic calendar display.
-- **Native Performance**: Built on Tauri v2 for an ultra-lightweight footprint (~5MB).
-- **Auto-Location**: Automatically detects your zone for prayer times.
-- **Multiple Calculation Methods**: JAKIM, MUIS, MWL, ISNA, Umm Al-Qura, and more.
+### Prayer Times
+- **Accurate Prayer Times** — Directly sourced from JAKIM (Malaysia) or calculated locally (Global).
+- **Multiple Calculation Methods** — JAKIM, MUIS, MWL, ISNA, Umm Al-Qura, and more.
+- **Auto-Location** — Automatically detects your zone for prayer times.
+- **Hijri Calendar** — Integrated Islamic calendar display with date header.
+
+### Menu Bar
+- **Menu Bar Integration** — Discreetly lives in your menu bar with next prayer countdown.
+- **Jumaat-Aware Labels** — Shows Malay prayer names with proper Friday labeling.
+- **Quick Mute** — Click the menu bar icon to instantly stop a playing Adhan.
+
+### Audio & Notifications
+- **Audio Adhan** — Automated Adhan playback (Nasser, Ahmed) at prayer times.
+- **Per-Prayer Audio Control** — Choose between Adhan, chime notification, or mute for each prayer.
+- **Non-Intrusive Alerts** — Prayer notifications without stealing window focus.
+
+### Reminders
+- **Daily Reminders** — Hadith & Dua notifications with full-content modal.
+- **Random Mode** — 3 reminders per day at randomized times (08:00–21:00).
+- **Custom Schedule** — Configure your own reminder times.
+- **Jumu'ah Reminder** — Surah Al-Kahf reading reminder every Friday at Dhuhr.
+
+### Islamic Key Dates
+- **Ramadhan Countdown** — Countdown starting 30 days before Ramadhan.
+- **Eid al-Fitr Countdown** — Countdown starting 15 days before Eid.
+- **Laylatul Qadr** — Highlights odd nights of the last 10 days of Ramadhan.
+- **Key Date Alerts** — On-date display for Israk & Mikraj, Eid al-Adha, Day of Arafah, Islamic New Year, and Mawlid Nabi.
+
+### Tracker & UI
+- **Prayer Habit Tracker** — Daily checkbox tracker that resets at midnight.
+- **Current Prayer Highlight** — Green highlight on the active prayer period.
+- **Rich Dashboard** — Beautiful, glassmorphic UI with smooth animations.
+- **Native Performance** — Built on Tauri v2 for an ultra-lightweight footprint (~5MB).
 
 ## 🚀 Installation
 
-Drag the `.app` bundle to your Applications folder.
+Download the latest `.dmg` from [Releases](https://github.com/dochafiz/Sajda/releases) and drag the `.app` to your Applications folder.
+
+> **Note:** Since the app is not code-signed, macOS may block it. Run this in Terminal after installing:
+> ```bash
+> xattr -cr /Applications/Sajda.app
+> ```
 
 ## 🛠 Tech Stack
 
-- **Frontend**: React, TypeScript, TailwindCSS, Shadcn/UI
-- **Backend**: Rust (Tauri), Tokio, Rodio (Audio), Chrono
-- **State Management**: Zustand
-- **Data Source**: WaktuSolat.app API (JAKIM), Salah (Calculation)
+- **Frontend**: React 19, TypeScript, Vite, TailwindCSS, Zustand
+- **Backend**: Rust (Tauri v2), Tokio, Rodio (Audio)
+- **Data Source**: WaktuSolat.app API (JAKIM), Salah library (Global calculations)
 
 ## 👤 Author
 

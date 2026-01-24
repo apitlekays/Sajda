@@ -29,6 +29,9 @@ interface SettingsState {
     alkahfEnabled: boolean;
     toggleAlKahf: () => Promise<void>;
 
+    ramadhanCountdown: boolean;
+    toggleRamadhanCountdown: () => Promise<void>;
+
     // Adhan Voice
     adhanSelection: AdhanVoice;
     setAdhanSelection: (voice: AdhanVoice) => Promise<void>;
@@ -50,6 +53,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     randomReminders: true,
     reminderTimes: ["09:00", "21:00"],
     alkahfEnabled: true,
+    ramadhanCountdown: true,
 
     adhanSelection: 'Nasser',
     calculationMethod: 'JAKIM',
@@ -63,6 +67,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             const randomRemindersVal = await store.get<boolean>('random_reminders');
             const reminderTimesVal = await store.get<string[]>('reminder_times');
             const alkahfVal = await store.get<boolean>('alkahf_enabled');
+            const ramadhanVal = await store.get<boolean>('ramadhan_countdown');
             const adhanVal = await store.get<AdhanVoice>('adhan_selection');
             const calcVal = await store.get<string>('calculation_method');
 
@@ -79,6 +84,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
                 randomReminders: randomRemindersVal !== null ? randomRemindersVal : true,
                 reminderTimes: reminderTimesVal || ["09:00", "21:00"],
                 alkahfEnabled: alkahfVal !== null ? alkahfVal : true,
+                ramadhanCountdown: ramadhanVal !== null ? ramadhanVal : true,
                 adhanSelection: adhanVal || 'Nasser', // Default to Nasser
                 calculationMethod: calcVal || 'JAKIM',
                 isLoading: false
@@ -186,6 +192,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save alkahf settings:", e);
+        }
+    },
+
+    toggleRamadhanCountdown: async () => {
+        const { ramadhanCountdown } = get();
+        const newState = !ramadhanCountdown;
+        set({ ramadhanCountdown: newState });
+
+        try {
+            const store = await load(STORE_PATH);
+            await store.set('ramadhan_countdown', newState);
+            await store.save();
+        } catch (e) {
+            console.error("Failed to save ramadhan countdown setting:", e);
         }
     },
 
