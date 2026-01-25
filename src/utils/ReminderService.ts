@@ -7,13 +7,20 @@ import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notif
  * This file now only provides permission helpers.
  */
 
+/**
+ * @deprecated Reminder scheduling moved to Rust backend (scheduler.rs).
+ * This function is a no-op and will be removed in v1.0.
+ */
 export const startReminderService = () => {
-    // Deprecated: No-op
-    console.log("Legacy Reminder Service skipped (Rust backend active)");
+    console.warn("startReminderService is deprecated - Rust backend handles scheduling");
 };
 
+/**
+ * @deprecated Reminder scheduling moved to Rust backend (scheduler.rs).
+ * This function is a no-op and will be removed in v1.0.
+ */
 export const stopReminderService = () => {
-    // Deprecated: No-op
+    console.warn("stopReminderService is deprecated - Rust backend handles scheduling");
 };
 
 export const checkNotificationPermission = async (): Promise<boolean> => {

@@ -11,16 +11,28 @@ pub struct AudioState {
 }
 
 impl AudioState {
-    pub fn new() -> Self {
-        let (stream, stream_handle) =
-            OutputStream::try_default().expect("failed to get default audio output");
-        let sink = Sink::try_new(&stream_handle).expect("failed to create audio sink");
+    pub fn try_new() -> Option<Self> {
+        let (stream, stream_handle) = match OutputStream::try_default() {
+            Ok(result) => result,
+            Err(e) => {
+                println!("Rust: Warning - No audio device available: {}", e);
+                return None;
+            }
+        };
 
-        Self {
+        let sink = match Sink::try_new(&stream_handle) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("Rust: Warning - Failed to create audio sink: {}", e);
+                return None;
+            }
+        };
+
+        Some(Self {
             _stream: stream,
             stream_handle,
             sink: Arc::new(Mutex::new(sink)),
-        }
+        })
     }
 }
 
@@ -31,16 +43,18 @@ unsafe impl Sync for AudioState {}
 pub async fn play_audio_file(
     _app_handle: tauri::AppHandle,
     file_path: String,
-    state: State<'_, AudioState>,
+    state: State<'_, Option<AudioState>>,
 ) -> Result<(), String> {
     println!("Requesting to play audio: {}", file_path);
+
+    let audio_state = state.as_ref().ok_or("No audio device available")?;
 
     let file = File::open(&file_path)
         .map_err(|e| format!("Failed to open file '{}': {}", file_path, e))?;
     let reader = BufReader::new(file);
     let source = Decoder::new(reader).map_err(|e| format!("Failed to decode audio: {}", e))?;
 
-    let mut sink_guard = state.sink.lock().map_err(|_| "Failed to lock audio sink")?;
+    let mut sink_guard = audio_state.sink.lock().map_err(|_| "Failed to lock audio sink")?;
 
     // Check if we can reuse the existing sink (is it empty/finished?)
     if sink_guard.empty() {
@@ -53,7 +67,7 @@ pub async fn play_audio_file(
         sink_guard.stop();
 
         // Create a new sink from the stream handle
-        let new_sink = Sink::try_new(&state.stream_handle)
+        let new_sink = Sink::try_new(&audio_state.stream_handle)
             .map_err(|e| format!("Failed to create sink: {}", e))?;
         new_sink.append(source);
 
@@ -66,13 +80,9 @@ pub async fn play_audio_file(
 }
 
 #[tauri::command]
-pub fn stop_audio(state: State<'_, AudioState>) -> Result<(), String> {
-    let sink = state.sink.lock().map_err(|_| "Failed to lock audio sink")?;
+pub fn stop_audio(state: State<'_, Option<AudioState>>) -> Result<(), String> {
+    let audio_state = state.as_ref().ok_or("No audio device available")?;
+    let sink = audio_state.sink.lock().map_err(|_| "Failed to lock audio sink")?;
     sink.stop();
-    // Ideally we might also want to "clear" it or ensure it's ready for next time,
-    // but stopping is sufficient to silence it.
-    // If we want to verify it's empty next time, stop() usually doesn't clear the queue in all versions?
-    // Actually in rodio, stop() might just pause or clear.
-    // A replacement strategy in play_audio_file handles the "busy" case anyway.
     Ok(())
 }

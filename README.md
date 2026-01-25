@@ -40,7 +40,7 @@
 - **Daily Reminders** — Hadith & Dua notifications with full-content modal.
 - **Random Mode** — 3 reminders per day at randomized times (08:00–21:00).
 - **Custom Schedule** — Configure your own reminder times.
-- **Jumu'ah Reminder** — Surah Al-Kahf reading reminder every Friday at Dhuhr.
+- **Jumu'ah Reminder** — Surah Al-Kahf reading reminder every Friday at Zohor.
 
 ### Islamic Key Dates
 - **Ramadhan Countdown** — Countdown starting 30 days before Ramadhan.
@@ -68,6 +68,31 @@ Download the latest `.dmg` from [Releases](https://github.com/dochafiz/Sajda/rel
 - **Frontend**: React 19, TypeScript, Vite, TailwindCSS, Zustand
 - **Backend**: Rust (Tauri v2), Tokio, Rodio (Audio)
 - **Data Source**: WaktuSolat.app API (JAKIM), Salah library (Global calculations)
+
+## 🧪 Testing
+
+| Suite | Tests | Status |
+|-------|-------|--------|
+| Frontend (Vitest) | 6 | ✅ |
+| Backend (Cargo) | 24 | ✅ |
+| **Total** | **30** | ✅ |
+
+```bash
+# Run frontend tests
+npm test
+
+# Run frontend tests in watch mode
+npm run test:watch
+
+# Run frontend tests with coverage
+npm run test:coverage
+
+# Run Rust backend tests
+npm run test:rust
+
+# Run all tests (frontend + backend)
+npm run test:all
+```
 
 ## 👤 Author
 

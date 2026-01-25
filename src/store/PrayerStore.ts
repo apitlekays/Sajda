@@ -28,17 +28,26 @@ interface PrayerStore {
     todayTimes: PrayerTime | null;
     loading: boolean;
     nextPrayer: NextPrayer | null;
+    _intervalId: number | null;
+    _unlisteners: (() => void)[];
+    _listenersInitialized: boolean;
 
     setZone: (zone: string) => void;
     fetchTimes: () => Promise<void>;
     updateCountdown: () => void;
+    initializeListeners: () => Promise<void>;
+    startLocationPolling: () => void;
+    cleanup: () => void;
 }
 
-export const usePrayerStore = create<PrayerStore>((set) => ({
+export const usePrayerStore = create<PrayerStore>((set, get) => ({
     zone: "WLY01",
     todayTimes: null,
     loading: false,
     nextPrayer: null,
+    _intervalId: null,
+    _unlisteners: [],
+    _listenersInitialized: false,
 
     setZone: (zone) => set({ zone }),
 
@@ -59,30 +68,9 @@ export const usePrayerStore = create<PrayerStore>((set) => ({
                 console.error("Zone detection failed", e);
             }
 
-            // Start Location Polling (Every 15 minutes)
-            setInterval(async () => {
-                const coords = await LocationService.getCoordinates();
-                if (coords && (coords.lat !== 0 || coords.lng !== 0)) {
-                    console.log("Polling Location:", coords);
-                    await invoke("update_coordinates", { lat: coords.lat, lng: coords.lng });
-                }
-            }, 10 * 60 * 1000);
-
             // 2. Fetch Times from Rust
             const times = await invoke<PrayerTime>("get_prayers");
             console.log("Rust returned times:", times);
-
-            // 3. Listen for updates (if not already listening, but listening multiple times is safe slightly if same logic? No, duplicate listeners bad.
-            // Ideally setup listener once. But simple approach here works if component mounts once.)
-            // We'll leave it simple.
-            await listen<NextPrayer>("prayer-update", (event) => {
-                set({ nextPrayer: event.payload });
-            });
-
-            await listen<PrayerTime>("prayers-refreshed", (event) => {
-                console.log("Got prayers-refreshed event:", event.payload);
-                set({ todayTimes: event.payload, loading: false });
-            });
 
             set({ todayTimes: times || null, loading: false });
 
@@ -90,6 +78,72 @@ export const usePrayerStore = create<PrayerStore>((set) => ({
             console.error(error);
             set({ loading: false });
         }
+    },
+
+    initializeListeners: async () => {
+        const state = get();
+
+        // Prevent duplicate listener registration
+        if (state._listenersInitialized) {
+            console.log("Listeners already initialized, skipping");
+            return;
+        }
+
+        const unlistenPrayer = await listen<NextPrayer>("prayer-update", (event) => {
+            set({ nextPrayer: event.payload });
+        });
+
+        const unlistenRefresh = await listen<PrayerTime>("prayers-refreshed", (event) => {
+            console.log("Got prayers-refreshed event:", event.payload);
+            set({ todayTimes: event.payload, loading: false });
+        });
+
+        set({
+            _unlisteners: [unlistenPrayer, unlistenRefresh],
+            _listenersInitialized: true
+        });
+        console.log("Prayer store listeners initialized");
+    },
+
+    startLocationPolling: () => {
+        const state = get();
+
+        // Prevent duplicate intervals
+        if (state._intervalId !== null) {
+            console.log("Location polling already active, skipping");
+            return;
+        }
+
+        const intervalId = window.setInterval(async () => {
+            const coords = await LocationService.getCoordinates();
+            if (coords && (coords.lat !== 0 || coords.lng !== 0)) {
+                console.log("Polling Location:", coords);
+                await invoke("update_coordinates", { lat: coords.lat, lng: coords.lng });
+            }
+        }, 10 * 60 * 1000); // 10 minutes
+
+        set({ _intervalId: intervalId });
+        console.log("Location polling started with interval ID:", intervalId);
+    },
+
+    cleanup: () => {
+        const state = get();
+
+        // Clear interval
+        if (state._intervalId !== null) {
+            clearInterval(state._intervalId);
+            console.log("Location polling stopped");
+        }
+
+        // Call all unlisten functions
+        state._unlisteners.forEach(unlisten => unlisten());
+        console.log("Prayer store listeners cleaned up");
+
+        set({
+            _intervalId: null,
+            _unlisteners: [],
+            _listenersInitialized: false
+        });
     },
 
     updateCountdown: () => {

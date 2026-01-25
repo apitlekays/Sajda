@@ -19,14 +19,23 @@ Sajda is a macOS menu bar application for Islamic prayer times and reminders. Bu
 - `cargo build` — Build Rust backend (run from `src-tauri/`)
 - `cargo check` — Type-check Rust code (run from `src-tauri/`)
 
+### Testing
+
+- `npm test` — Run frontend tests (Vitest)
+- `npm run test:watch` — Run frontend tests in watch mode
+- `npm run test:coverage` — Run frontend tests with coverage
+- `npm run test:rust` — Run Rust backend tests
+- `npm run test:all` — Run all tests (frontend + backend)
+
 ## Project Structure
 
 ```
 src/                    # React/TypeScript frontend
-  components/           # UI components (Dashboard.tsx is main view)
+  components/           # UI components (Dashboard.tsx, ErrorBoundary.tsx)
   store/                # Zustand stores (Prayer, Reminder, Settings, Tracker)
-  utils/                # Services (Audio, Location, Reminder, ZoneData, HijriDate)
+  utils/                # Services (Audio, Location, Reminder, ZoneData, HijriDate, UISounds, MalayDictionary)
   data/                 # Static data (reminders, dua.json, sahih_bukhari.json)
+  test/                 # Test setup and fixtures
 src-tauri/              # Rust/Tauri backend
   src/                  # Rust source (audio, jakim_api, prayer_engine, scheduler, settings)
   resources/audio/      # Adhan audio files
@@ -82,18 +91,35 @@ public/                 # Static assets, fonts, icons
 - Rust code uses standard Tauri command pattern with `#[tauri::command]`
 - App identifier: `net.hafizhanif.sajda`
 
+### Malay Language Standards
+
+All Malay language terms are centralized in `src/utils/MalayDictionary.ts` for consistency:
+- Prayer names: Subuh, Syuruk, Zohor/Jumaat, Asar, Maghrib, Isyak
+- Hijri months: Use Malaysian spelling (e.g., "Ramadhan" not "Ramadan", "Syawal" not "Shawwal")
+- UI labels and notification messages use standard Bahasa Malaysia conventions
+
 ## Key Files
 
+### Frontend Components
 - `src/components/Dashboard.tsx` — Main UI component (settings, reminder modal, prayer list, key dates)
+- `src/components/ErrorBoundary.tsx` — React error boundary for graceful error handling
+
+### Stores
 - `src/store/PrayerStore.ts` — Prayer times state management
 - `src/store/ReminderStore.ts` — Reminder content generation (hadith/dua) and modal state
 - `src/store/SettingsStore.ts` — Persisted user settings (audio, reminders, key dates, calculation method)
 - `src/store/TrackerStore.ts` — Prayer habit tracker (date-keyed daily checkboxes)
+
+### Utilities
 - `src/utils/HijriDate.ts` — Hijri calendar conversion and Islamic key date detection
+- `src/utils/MalayDictionary.ts` — Central dictionary for Malay language terms (prayer names, Hijri months, UI labels)
+- `src/utils/UISounds.ts` — Web Audio API-based UI feedback sounds (toggle clicks, checkbox ticks)
+
+### Rust Backend
 - `src-tauri/src/lib.rs` — App setup, tray icon handler, quit command, audio stop on click
 - `src-tauri/src/prayer_engine.rs` — Prayer time calculation logic
 - `src-tauri/src/jakim_api.rs` — Malaysian prayer times API
-- `src-tauri/src/audio.rs` — Adhan audio playback
+- `src-tauri/src/audio.rs` — Adhan audio playback (graceful fallback when no audio device)
 - `src-tauri/src/scheduler.rs` — Background task scheduling (prayer triggers, daily reminders)
 - `src-tauri/src/settings.rs` — Rust-side settings deserialization
 - `src-tauri/tauri.conf.json` — App window/bundle configuration

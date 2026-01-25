@@ -10,6 +10,8 @@ import { useReminderStore } from "../store/ReminderStore";
 import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart, Info, LogOut, Moon } from "lucide-react";
 import { ZONE_MAPPING } from "../utils/ZoneData";
 import { getIslamicKeyDateMessages } from "../utils/HijriDate";
+import { playToggleSound, playCheckSound } from "../utils/UISounds";
+import { HIJRI_MONTHS, getPrayerDisplayName, PrayerKey } from "../utils/MalayDictionary";
 
 export const Dashboard = () => {
     const { todayTimes, nextPrayer, fetchTimes, updateCountdown, loading, zone } = usePrayerStore();
@@ -96,9 +98,16 @@ export const Dashboard = () => {
         return () => { if (unlisten) unlisten(); };
     }, [triggerNewReminder, openModal]);
 
-    // 1. Initial Fetch
+    // 1. Initial Fetch & Setup
     useEffect(() => {
+        const store = usePrayerStore.getState();
+        store.initializeListeners();
+        store.startLocationPolling();
         fetchTimes();
+
+        return () => {
+            store.cleanup();
+        };
     }, [fetchTimes]);
 
     // 2. Countdown Interval
@@ -121,12 +130,7 @@ export const Dashboard = () => {
         if (!hijriStr) return null;
         try {
             const [y, m, d] = hijriStr.split("-").map(Number);
-            const months = [
-                "Muharram", "Safar", "Rabiulawal", "Rabiulakhir",
-                "Jamadilawal", "Jamadilakhir", "Rejab", "Syaaban",
-                "Ramadan", "Syawal", "Zulkaedah", "Zulhijjah"
-            ];
-            const monthName = months[m - 1] || "";
+            const monthName = HIJRI_MONTHS[m - 1] || "";
             return (
                 <>
                     {d} {monthName} {y}
@@ -153,13 +157,9 @@ export const Dashboard = () => {
     // Check if Friday for Jumaat naming
     const isFriday = new Date().getDay() === 5;
 
-    const prayerMap: Record<string, string> = {
-        fajr: "Subuh",
-        syuruk: "Syuruk",
-        dhuhr: isFriday ? "Jumaat" : "Zohor",
-        asr: "Asar",
-        maghrib: "Maghrib",
-        isha: "Isyak"
+    // Use central dictionary for prayer names
+    const getPrayerName = (key: string): string => {
+        return getPrayerDisplayName(key as PrayerKey, isFriday);
     };
 
     const getAudioIcon = (mode: AudioMode) => {
@@ -184,19 +184,19 @@ export const Dashboard = () => {
             {/* Settings Drawer */}
             <div
                 className={cn(
-                    "fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex flex-col p-6 space-y-6",
+                    "fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex flex-col p-4 space-y-2",
                     isMounted ? "transition-transform duration-300 ease-in-out" : "duration-0",
                     isSettingsOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >
                 <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-bold font-buda">Settings</h2>
-                    <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-muted rounded-full">
-                        <X className="w-6 h-6" />
+                    <h2 className="text-xl font-bold font-buda">Settings</h2>
+                    <button onClick={() => setIsSettingsOpen(false)} className="p-1.5 hover:bg-muted rounded-full">
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-4 pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="flex-1 overflow-y-auto space-y-4 px-3 py-3 rounded-lg bg-muted/30 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
 
 
                     <div className="flex items-center justify-between">
@@ -306,7 +306,7 @@ export const Dashboard = () => {
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col">
                             <span className="text-sm font-medium">Jumu'ah Reminder</span>
-                            <span className="text-[10px] text-muted-foreground leading-tight">Surah Al-Kahf at Zuhur/Jumaat</span>
+                            <span className="text-[10px] text-muted-foreground leading-tight">Surah Al-Kahf at Zohor/Jumaat</span>
                         </div>
                         <button
                             onClick={toggleAlKahf}
@@ -440,7 +440,7 @@ export const Dashboard = () => {
                 </div>
 
                 {/* Credit Footer */}
-                <div className="pt-4 text-center text-[10px] text-muted-foreground/60">
+                <div className="pt-1 text-center text-[10px] text-muted-foreground/60">
                     <p className="flex items-center justify-center gap-1">
                         Developed with <Heart className="w-3 h-3 text-red-400 fill-red-400" /> by Hafiz Hanif, PhD.
                     </p>
@@ -505,7 +505,7 @@ export const Dashboard = () => {
                     </h1>
                 </div>
                 <p className="text-xl font-semibold text-foreground">
-                    until <span className="text-primary capitalize">{nextPrayer ? (prayerMap[nextPrayer.name] || nextPrayer.name) : "..."}</span>
+                    until <span className="text-primary capitalize">{nextPrayer ? getPrayerName(nextPrayer.name) : "..."}</span>
                 </p>
                 {ramadhanCountdown && (() => {
                     const msgs = getIslamicKeyDateMessages();
@@ -526,12 +526,12 @@ export const Dashboard = () => {
             <div className="space-y-1">
                 {(() => {
                     // Determine current prayer: the one before nextPrayer in order
-                    const prayerOrder = ["fajr", "syuruk", "dhuhr", "asr", "maghrib", "isha"];
-                    const nextIdx = prayerOrder.indexOf(nextPrayer?.name || "");
+                    type PrayerKey = "fajr" | "syuruk" | "dhuhr" | "asr" | "maghrib" | "isha";
+                    const prayerOrder: PrayerKey[] = ["fajr", "syuruk", "dhuhr", "asr", "maghrib", "isha"];
+                    const nextIdx = prayerOrder.indexOf((nextPrayer?.name || "") as PrayerKey);
                     const currentPrayerName = nextIdx > 0 ? prayerOrder[nextIdx - 1] : (nextIdx === 0 ? "isha" : null);
 
                     return prayerOrder.map((p) => {
-                    // @ts-ignore
                     const timeVal = todayTimes[p];
                     const isCurrent = currentPrayerName === p;
                     const checked = isChecked(p);
@@ -572,7 +572,7 @@ export const Dashboard = () => {
                             {/* Left: Audio Toggle (Hidden for Syuruk) */}
                             {p !== "syuruk" ? (
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); cycleAudioMode(p); }}
+                                    onClick={(e) => { e.stopPropagation(); playToggleSound(); cycleAudioMode(p); }}
                                     className="p-1.5 hover:bg-background/50 rounded-full transition-colors"
                                 >
                                     {getAudioIcon(audioMode)}
@@ -583,14 +583,14 @@ export const Dashboard = () => {
 
                             {/* Center: Name & Time */}
                             <div className="flex-1 px-3 flex items-center justify-between">
-                                <span className="font-medium capitalize text-sm">{prayerMap[p] || p}</span>
+                                <span className="font-medium capitalize text-sm">{getPrayerName(p)}</span>
                                 <span>{displayTime}</span>
                             </div>
 
                             {/* Right: Circular Checkbox (Hidden for Syuruk) */}
                             {p !== "syuruk" ? (
                                 <button
-                                    onClick={() => togglePrayer(p)}
+                                    onClick={() => { playCheckSound(); togglePrayer(p); }}
                                     className={cn(
                                         "w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-200",
                                         checked

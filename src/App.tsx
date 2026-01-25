@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import "./App.css";
 import { Dashboard } from "./components/Dashboard";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useTrackerStore } from "./store/TrackerStore";
 import { useSettingsStore } from "./store/SettingsStore";
 
@@ -24,12 +25,14 @@ function App() {
   }, []);
 
   return (
-    <div className="h-screen w-screen bg-transparent overflow-hidden select-none font-sans text-foreground">
-      {/* Main Application Container */}
-      <div className="h-full w-full flex flex-col bg-background/95 backdrop-blur-3xl shadow-2xl border border-white/10 relative overflow-hidden">
-        <Dashboard />
+    <ErrorBoundary>
+      <div className="h-screen w-screen bg-transparent overflow-hidden select-none font-sans text-foreground">
+        {/* Main Application Container */}
+        <div className="h-full w-full flex flex-col bg-background/95 backdrop-blur-3xl shadow-2xl border border-white/10 relative overflow-hidden">
+          <Dashboard />
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
 

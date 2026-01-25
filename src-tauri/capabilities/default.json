@@ -16,6 +16,7 @@
     "geolocation:allow-get-current-position",
     "geolocation:allow-request-permissions",
     "geolocation:allow-check-permissions",
-    "notification:default"
+    "notification:default",
+    "core:path:default"
   ]
 }

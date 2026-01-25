@@ -4,7 +4,13 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+/// Base URL for JAKIM prayer times API (waktusolat.app).
+/// This API provides official Malaysian prayer times based on GPS coordinates.
+/// The API returns prayer times for the current month based on JAKIM data.
 const API_BASE: &str = "https://api.waktusolat.app/v2/solat/gps";
+
+/// URL for fetching Malaysian zone data (state/district mappings).
+const ZONES_URL: &str = "https://api.waktusolat.app/zones";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Zone {
@@ -62,10 +68,9 @@ pub fn get_zones_path(app: &AppHandle) -> Option<PathBuf> {
 }
 
 pub async fn fetch_zones() -> Result<Vec<Zone>, String> {
-    let url = "https://api.waktusolat.app/zones";
-    println!("Rust: Fetching Zones from {}", url);
+    println!("Rust: Fetching Zones from {}", ZONES_URL);
     let client = reqwest::Client::new();
-    let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
+    let resp = client.get(ZONES_URL).send().await.map_err(|e| e.to_string())?;
     resp.json::<Vec<Zone>>().await.map_err(|e| e.to_string())
 }
 

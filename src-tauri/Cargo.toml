@@ -35,4 +35,5 @@ chrono = "0.4.43"
 tokio = "1.49.0"
 image = "0.25"
 
-
+[dev-dependencies]
+tokio-test = "0.4"

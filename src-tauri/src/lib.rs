@@ -1,5 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -29,13 +29,9 @@ fn update_coordinates(app: tauri::AppHandle, lat: f64, lng: f64) {
     engine.update_coordinates(lat, lng);
     println!("Rust: Coordinates updated to {}, {}", lat, lng);
 
-    // Trigger Refetch if needed (JAKIM API)
-    // ... existing logic ...
-    // Note: If Method != JAKIM, needs_refetch logic in engine might need tweaking?
-    // Actually needs_refetch is only for cache invalidation. If method is not JAKIM, we don't care about cache.
-    // So existing logic is fine, it just won't be used if set_method was called.
-    // BUT we should probably re-emit a schedule update here regardless?
-    // Force emit?
+    // Always emit schedule update after coordinate change.
+    // For JAKIM method: triggers cache lookup; if cache is stale, API fetch follows below.
+    // For other methods: recalculates prayer times using the new coordinates.
     if let Some(schedule) = engine.get_today_schedule() {
         let _ = app.emit("prayers-refreshed", &schedule);
     }
@@ -206,11 +202,13 @@ pub fn run() {
                     } = event
                     {
                         // Stop any playing athan/audio immediately
-                        let audio = tray.app_handle().state::<audio::AudioState>();
-                        if let Ok(sink) = audio.sink.lock() {
-                            if !sink.empty() {
-                                sink.stop();
-                                println!("Rust: Audio stopped via tray click");
+                        let audio = tray.app_handle().state::<Option<audio::AudioState>>();
+                        if let Some(audio_state) = audio.as_ref() {
+                            if let Ok(sink) = audio_state.sink.lock() {
+                                if !sink.empty() {
+                                    sink.stop();
+                                    println!("Rust: Audio stopped via tray click");
+                                }
                             }
                         }
 
@@ -246,49 +244,34 @@ pub fn run() {
                 .build(app)?;
 
             // LISTENERS FOR NOTIFICATION CLICKS
-            // Strategy: Switch to Regular -> Position -> Top -> Show -> Focus
+            // Multiple event names are listened because Tauri notification plugin may emit on different channels
+            // across platforms/versions. We consolidate the logic into a helper function.
+            fn handle_notification_click(app: &AppHandle, channel: &str) {
+                println!("Rust: Notification Clicked ({})", channel);
+                if let Some(window) = app.get_webview_window("main") {
+                    #[cfg(target_os = "macos")]
+                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+
+                    let _ = window.move_window(Position::TrayCenter);
+                    let _ = window.set_always_on_top(true);
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+
             let handle_clone = app.handle().clone();
             app.listen_any("notification-click", move |_| {
-                println!("Rust: Notification Clicked (notification-click channel)");
-                if let Some(window) = handle_clone.get_webview_window("main") {
-                    #[cfg(target_os = "macos")]
-                    let _ = handle_clone.set_activation_policy(tauri::ActivationPolicy::Regular);
-
-                    let _ = window.move_window(Position::TrayCenter);
-                    let _ = window.set_always_on_top(true);
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                handle_notification_click(&handle_clone, "notification-click");
             });
 
-            // Backup: Underscore variant
             let handle_clone2 = app.handle().clone();
             app.listen_any("notification_click", move |_| {
-                println!("Rust: Notification Clicked (notification_click channel)");
-                if let Some(window) = handle_clone2.get_webview_window("main") {
-                    #[cfg(target_os = "macos")]
-                    let _ = handle_clone2.set_activation_policy(tauri::ActivationPolicy::Regular);
-
-                    let _ = window.move_window(Position::TrayCenter);
-                    let _ = window.set_always_on_top(true);
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                handle_notification_click(&handle_clone2, "notification_click");
             });
 
-            // Backup: Standard plugin action channel
             let handle_clone3 = app.handle().clone();
             app.listen_any("plugin:notification:action", move |_| {
-                println!("Rust: Notification Action (plugin channel)");
-                if let Some(window) = handle_clone3.get_webview_window("main") {
-                    #[cfg(target_os = "macos")]
-                    let _ = handle_clone3.set_activation_policy(tauri::ActivationPolicy::Regular);
-
-                    let _ = window.move_window(Position::TrayCenter);
-                    let _ = window.set_always_on_top(true);
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                handle_notification_click(&handle_clone3, "plugin:notification:action");
             });
 
             Ok(())
@@ -349,7 +332,7 @@ pub fn run() {
             let _ = window.show();
             let _ = window.set_focus();
         }))
-        .manage(audio::AudioState::new())
+        .manage(audio::AudioState::try_new())
         .manage(TrayState {
             last_show: Mutex::new(None),
             last_hide: Mutex::new(None),

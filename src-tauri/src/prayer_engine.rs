@@ -76,7 +76,10 @@ impl PrayerEngine {
     }
 
     pub fn update_zones(&self, new_map: ZonesMap) {
-        let mut z = self.zones.lock().unwrap();
+        let Ok(mut z) = self.zones.lock() else {
+            println!("Rust: Warning - zones mutex poisoned, skipping update");
+            return;
+        };
         *z = Some(new_map);
         println!("Rust: Zones Map Updated");
     }
@@ -102,10 +105,16 @@ impl PrayerEngine {
         // Preserve Madhab if needed, mostly handled in params or set separately
         // params.madhab = madhab; // Salah parameters might store madhab
 
-        let mut strat = self.strategy.lock().unwrap();
+        let Ok(mut strat) = self.strategy.lock() else {
+            println!("Rust: Warning - strategy mutex poisoned");
+            return;
+        };
         *strat = params;
 
-        let mut cm = self.current_method.lock().unwrap();
+        let Ok(mut cm) = self.current_method.lock() else {
+            println!("Rust: Warning - current_method mutex poisoned");
+            return;
+        };
         *cm = method_name.to_string();
 
         println!("Rust: Calculation Method Updated to {}", method_name);
@@ -113,18 +122,27 @@ impl PrayerEngine {
 
     pub fn update_coordinates(&self, lat: f64, lng: f64) {
         let coords = Coordinates::new(lat, lng);
-        let mut c = self.coordinates.lock().unwrap();
+        let Ok(mut c) = self.coordinates.lock() else {
+            println!("Rust: Warning - coordinates mutex poisoned");
+            return;
+        };
         *c = Some(coords);
     }
 
     pub fn update_cache(&self, new_cache: JakimCache) {
-        let mut c = self.cache.lock().unwrap();
+        let Ok(mut c) = self.cache.lock() else {
+            println!("Rust: Warning - cache mutex poisoned");
+            return;
+        };
         *c = Some(new_cache);
         println!("Rust: PrayerEngine Cache Updated");
     }
 
     pub fn needs_refetch(&self, lat: f64, lng: f64) -> bool {
-        let cache_guard = self.cache.lock().unwrap();
+        let Ok(cache_guard) = self.cache.lock() else {
+            println!("Rust: Warning - cache mutex poisoned, forcing refetch");
+            return true;
+        };
         if let Some(cache) = cache_guard.as_ref() {
             let now_month = Local::now().format("%b-%Y").to_string();
             if cache.month_hash != now_month {
@@ -151,7 +169,10 @@ impl PrayerEngine {
     }
 
     fn resolve_zone_name(&self, code: &str) -> String {
-        let zones = self.zones.lock().unwrap();
+        let Ok(zones) = self.zones.lock() else {
+            println!("Rust: Warning - zones mutex poisoned, using code as fallback");
+            return code.to_string();
+        };
         if let Some(map) = zones.as_ref() {
             if let Some(z) = map.get(code) {
                 return format!("{}, {}", z.daerah, z.negeri);
@@ -175,9 +196,9 @@ impl PrayerEngine {
 
         // 1. Try Cache (ONLY if method is JAKIM)
         {
-            let current_method = self.current_method.lock().unwrap();
+            let current_method = self.current_method.lock().ok()?;
             if *current_method == "JAKIM" {
-                let cache = self.cache.lock().unwrap();
+                let cache = self.cache.lock().ok()?;
                 if let Some(c) = cache.as_ref() {
                     if let Some(p) = c.prayers.get(&date_key) {
                         return Some(PrayerSchedule {
@@ -198,13 +219,14 @@ impl PrayerEngine {
         }
 
         // 2. Fallback to Calculation
-        let coords = self.coordinates.lock().unwrap();
+        let coords = self.coordinates.lock().ok()?;
         let coords = coords.as_ref()?;
 
         let date = NaiveDate::from_ymd_opt(now.year(), now.month(), now.day())?;
 
         // Using configured strategy (JAKIM Standard)
-        let prayers = PrayerTimes::new(date, *coords, *self.strategy.lock().unwrap());
+        let strategy = self.strategy.lock().ok()?;
+        let prayers = PrayerTimes::new(date, *coords, *strategy);
 
         let to_timestamp = |dt: chrono::DateTime<chrono::Utc>| -> i64 { dt.timestamp() };
 
@@ -259,20 +281,21 @@ impl PrayerEngine {
         let mut found = false;
 
         {
-            let cache = self.cache.lock().unwrap();
-            if let Some(c) = cache.as_ref() {
-                if let Some(p) = c.prayers.get(&tom_key) {
-                    tom_fajr = p.fajr;
-                    found = true;
+            if let Ok(cache) = self.cache.lock() {
+                if let Some(c) = cache.as_ref() {
+                    if let Some(p) = c.prayers.get(&tom_key) {
+                        tom_fajr = p.fajr;
+                        found = true;
+                    }
                 }
             }
         }
 
         if !found {
-            let coords = self.coordinates.lock().unwrap();
+            let coords = self.coordinates.lock().ok()?;
             if let Some(coords) = coords.as_ref() {
-                let tom_prayers =
-                    PrayerTimes::new(tomorrow, *coords, *self.strategy.lock().unwrap());
+                let strategy = self.strategy.lock().ok()?;
+                let tom_prayers = PrayerTimes::new(tomorrow, *coords, *strategy);
                 tom_fajr = tom_prayers.time(Prayer::Fajr).timestamp();
             } else {
                 return None;
