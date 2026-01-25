@@ -23,7 +23,8 @@
 ### Prayer Times
 - **Accurate Prayer Times** — Directly sourced from JAKIM (Malaysia) or calculated locally (Global).
 - **Multiple Calculation Methods** — JAKIM, MUIS, MWL, ISNA, Umm Al-Qura, and more.
-- **Smart Location** — GPS-based location with user control; falls back to IP geolocation.
+- **Native GPS Location** — Uses macOS Core Location (10.15+) via Swift FFI for precise coordinates.
+- **Smart Fallback** — Falls back to IP geolocation if native location is unavailable or denied.
 - **Location Toggle** — Enable/disable location services in settings with permission guidance.
 - **Hijri Calendar** — Integrated Islamic calendar display with date header.
 
@@ -73,7 +74,7 @@ Download the latest `.dmg` from [Releases](https://github.com/dochafiz/Sajda/rel
 ## 🛠 Tech Stack
 
 - **Frontend**: React 19, TypeScript, Vite, TailwindCSS, Zustand
-- **Backend**: Rust (Tauri v2), Tokio, Rodio (Audio)
+- **Backend**: Rust (Tauri v2), Tokio, Rodio (Audio), Swift (Core Location via swift-rs)
 - **Data Source**: WaktuSolat.app API (JAKIM), Salah library (Global calculations)
 
 ## 🧪 Testing
@@ -81,8 +82,8 @@ Download the latest `.dmg` from [Releases](https://github.com/dochafiz/Sajda/rel
 | Suite | Tests | Status |
 |-------|-------|--------|
 | Frontend (Vitest) | 6 | ✅ |
-| Backend (Cargo) | 24 | ✅ |
-| **Total** | **30** | ✅ |
+| Backend (Cargo) | 25 | ✅ |
+| **Total** | **31** | ✅ |
 
 ```bash
 # Run frontend tests

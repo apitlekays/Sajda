@@ -8,5 +8,7 @@
     <string>Sajda requires access to your location to determine accurate prayer times for your zone.</string>
     <key>NSLocationUsageDescription</key>
     <string>Sajda requires access to your location to determine accurate prayer times for your zone.</string>
+    <key>NSUserNotificationsUsageDescription</key>
+    <string>Sajda sends notifications for prayer times and Islamic reminders.</string>
 </dict>
 </plist>

@@ -1,6 +1,6 @@
 [package]
 name = "sajda"
-version = "0.0.4"
+version = "0.0.5"
 description = "Modern Islamic Prayer Times & Reminder App for macOS"
 authors = ["Hafiz Hanif"]
 edition = "2021"
@@ -16,6 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+swift-rs = { version = "1.0.7", features = ["build"] }
 
 [dependencies]
 tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
@@ -36,6 +37,7 @@ salah = "0.7.6"
 chrono = "0.4.43"
 tokio = "1.49.0"
 image = "0.25"
+swift-rs = "1.0.7"
 
 [dev-dependencies]
 tokio-test = "0.4"

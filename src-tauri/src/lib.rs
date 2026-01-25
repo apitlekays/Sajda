@@ -16,6 +16,7 @@ fn update_tray_title(app: tauri::AppHandle, title: &str) {
 // Modules
 mod audio;
 mod jakim_api;
+mod location;
 mod prayer_engine;
 mod scheduler;
 mod settings;
@@ -348,7 +349,12 @@ pub fn run() {
             quit_app,
             audio::play_audio_file,
             audio::stop_audio,
-            debug_delayed_notification
+            debug_delayed_notification,
+            location::get_native_location,
+            location::check_native_location_auth,
+            location::request_native_location_auth,
+            location::is_native_location_available,
+            location::get_macos_version_cmd
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

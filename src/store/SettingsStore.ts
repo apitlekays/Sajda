@@ -322,12 +322,33 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
     checkLocationPermission: async () => {
         try {
-            const { checkPermissions } = await import('@tauri-apps/plugin-geolocation');
-            const permission = await checkPermissions();
-            const rawStatus = permission.location;
-            // Map 'prompt-with-rationale' to 'prompt' for our simpler type
-            const status: LocationPermissionStatus = rawStatus === 'prompt-with-rationale' ? 'prompt' :
-                (rawStatus === 'granted' || rawStatus === 'denied' || rawStatus === 'prompt') ? rawStatus : 'unknown';
+            const { LocationService } = await import('../utils/LocationService');
+
+            // Check if native location is available (macOS 10.15+)
+            const nativeAvailable = await LocationService.isNativeLocationAvailable();
+            if (!nativeAvailable) {
+                // Native not available - use IP fallback, report as 'unknown'
+                set({ locationPermissionStatus: 'unknown' });
+                return 'unknown';
+            }
+
+            const authStatus = await LocationService.checkNativeLocationAuth();
+            // Map auth status: 0 = authorized, 1 = denied, 2 = not determined, 3 = restricted, 4 = not supported
+            let status: LocationPermissionStatus;
+            switch (authStatus) {
+                case 0:
+                    status = 'granted';
+                    break;
+                case 1:
+                case 3:
+                    status = 'denied';
+                    break;
+                case 2:
+                    status = 'prompt';
+                    break;
+                default:
+                    status = 'unknown';
+            }
             set({ locationPermissionStatus: status });
             return status;
         } catch (e) {
@@ -348,31 +369,43 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
         // If trying to enable, check current permission status
         try {
-            const { checkPermissions, requestPermissions } = await import('@tauri-apps/plugin-geolocation');
-            const currentPermission = await checkPermissions();
-            const currentStatus = currentPermission.location;
+            const { LocationService } = await import('../utils/LocationService');
 
-            if (currentStatus === 'granted') {
-                // Permission already granted, just enable
+            // Check if native location is available (macOS 10.15+)
+            const nativeAvailable = await LocationService.isNativeLocationAvailable();
+            if (!nativeAvailable) {
+                // Native not available - enable anyway (will use IP fallback)
+                await setLocationEnabled(true);
+                set({ locationPermissionStatus: 'unknown' });
+                return { success: true, status: 'unknown' };
+            }
+
+            const authStatus = await LocationService.checkNativeLocationAuth();
+
+            if (authStatus === 0) {
+                // Already authorized
                 await setLocationEnabled(true);
                 set({ locationPermissionStatus: 'granted' });
                 return { success: true, status: 'granted' };
-            } else if (currentStatus === 'prompt' || currentStatus === 'prompt-with-rationale') {
-                // Request permission from user
-                const result = await requestPermissions(['location']);
-                const newStatus = result.location as LocationPermissionStatus;
+            } else if (authStatus === 2) {
+                // Not determined - request permission
+                await LocationService.requestNativeLocationAuth();
 
-                if (newStatus === 'granted') {
+                // Wait for user to respond
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Check status again
+                const newStatus = await LocationService.checkNativeLocationAuth();
+                if (newStatus === 0) {
                     await setLocationEnabled(true);
                     set({ locationPermissionStatus: 'granted' });
                     return { success: true, status: 'granted' };
                 } else {
-                    // User denied
                     set({ locationPermissionStatus: 'denied' });
                     return { success: false, status: 'denied' };
                 }
-            } else if (currentStatus === 'denied') {
-                // Permission was previously denied - user needs to go to System Settings
+            } else if (authStatus === 1 || authStatus === 3) {
+                // Denied or restricted - user needs to go to System Settings
                 set({ locationPermissionStatus: 'denied' });
                 return { success: false, status: 'denied' };
             }

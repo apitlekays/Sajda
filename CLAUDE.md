@@ -7,7 +7,7 @@ Sajda is a macOS menu bar application for Islamic prayer times and reminders. Bu
 ## Tech Stack
 
 - **Frontend:** React 19, TypeScript 5.8, Vite 7, Tailwind CSS 3, Zustand (state), Framer Motion
-- **Backend:** Rust, Tauri v2, Tokio, Rodio (audio), Salah (prayer calculations)
+- **Backend:** Rust, Tauri v2, Tokio, Rodio (audio), Salah (prayer calculations), Swift (Core Location via swift-rs)
 - **Platform:** macOS (menu bar app, 320x600px window, always-on-top)
 
 ## Commands
@@ -42,9 +42,12 @@ src/                    # React/TypeScript frontend
   data/                 # Static data (reminders, dua.json, sahih_bukhari.json)
   test/                 # Test setup and fixtures
 src-tauri/              # Rust/Tauri backend
-  src/                  # Rust source (audio, jakim_api, prayer_engine, scheduler, settings)
+  src/                  # Rust source (audio, jakim_api, location, prayer_engine, scheduler, settings)
+  swift/SajdaLocation/  # Swift package for native macOS Core Location
   resources/audio/      # Adhan audio files
   tauri.conf.json       # Tauri app configuration
+  Entitlements.plist    # macOS entitlements (location services)
+  Info.plist            # macOS Info.plist with usage descriptions
 public/                 # Static assets, fonts, icons
 ```
 
@@ -54,7 +57,36 @@ public/                 # Static assets, fonts, icons
 - Rust backend handles: audio playback (Rodio), prayer time calculations (Salah lib), JAKIM API integration, task scheduling, system-level settings
 - Communication between frontend and backend via Tauri IPC commands (`invoke()`) and events (`app.emit()` / `listen()`)
 - Prayer times: JAKIM API for Malaysia, Salah library fallback for global locations
-- Tauri plugins: autostart, geolocation, notification, store, positioner, opener
+- Tauri plugins: autostart, notification, store, positioner, opener
+
+### Native Location (macOS Core Location)
+
+Native GPS location is implemented via Swift FFI using the `swift-rs` crate. This provides accurate coordinates on macOS 10.15+.
+
+**Architecture Flow:**
+1. Frontend calls `LocationService.getNativeLocation()` via Tauri invoke
+2. Rust `location.rs` calls Swift functions via FFI
+3. Swift `SajdaLocation` package uses `CLLocationManager` to get GPS coordinates
+4. Results are returned through the FFI chain back to frontend
+
+**Authorization Flow:**
+- On first run, app requests location authorization (shows system dialog)
+- Authorization status: 0=authorized, 1=denied, 2=notDetermined, 3=restricted, 4=disabled
+- If native location fails or is denied, falls back to IP geolocation (ipapi.co)
+
+**Key Files:**
+- `src-tauri/swift/SajdaLocation/` — Swift package with CLLocationManager wrapper
+- `src-tauri/src/location.rs` — Rust FFI bindings and Tauri commands
+- `src/utils/LocationService.ts` — Frontend service with native/IP fallback logic
+- `src-tauri/Entitlements.plist` — Contains `com.apple.security.personal-information.location`
+- `src-tauri/Info.plist` — Contains `NSLocationUsageDescription` keys
+
+**Tauri Commands:**
+- `get_native_location` — Get current GPS coordinates
+- `check_native_location_auth` — Check authorization status
+- `request_native_location_auth` — Request authorization (shows system dialog)
+- `is_native_location_available` — Check if macOS 10.15+ (native location supported)
+- `get_macos_version_cmd` — Get macOS version string
 
 ### Reminder System Flow
 
@@ -119,6 +151,7 @@ All Malay language terms are centralized in `src/utils/MalayDictionary.ts` for c
 ### Utilities
 - `src/utils/Analytics.ts` — PostHog analytics integration (opt-out, EU-hosted)
 - `src/utils/HijriDate.ts` — Hijri calendar conversion and Islamic key date detection
+- `src/utils/LocationService.ts` — Location detection (native GPS via Swift FFI, IP fallback via ipapi.co)
 - `src/utils/MalayDictionary.ts` — Central dictionary for Malay language terms (prayer names, Hijri months, UI labels)
 - `src/utils/UISounds.ts` — Web Audio API-based UI feedback sounds (toggle clicks, checkbox ticks)
 
@@ -127,9 +160,13 @@ All Malay language terms are centralized in `src/utils/MalayDictionary.ts` for c
 - `src-tauri/src/prayer_engine.rs` — Prayer time calculation logic
 - `src-tauri/src/jakim_api.rs` — Malaysian prayer times API
 - `src-tauri/src/audio.rs` — Adhan audio playback (graceful fallback when no audio device)
+- `src-tauri/src/location.rs` — Native macOS Core Location via Swift FFI
 - `src-tauri/src/scheduler.rs` — Background task scheduling (prayer triggers, daily reminders)
 - `src-tauri/src/settings.rs` — Rust-side settings deserialization
 - `src-tauri/tauri.conf.json` — App window/bundle configuration
+
+### Swift Package
+- `src-tauri/swift/SajdaLocation/Sources/SajdaLocation/SajdaLocation.swift` — CLLocationManager wrapper with FFI exports
 
 ## Analytics & Error Tracking
 
