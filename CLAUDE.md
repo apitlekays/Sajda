@@ -111,6 +111,7 @@ All Malay language terms are centralized in `src/utils/MalayDictionary.ts` for c
 - `src/store/TrackerStore.ts` — Prayer habit tracker (date-keyed daily checkboxes)
 
 ### Utilities
+- `src/utils/Analytics.ts` — PostHog analytics integration (opt-out, EU-hosted)
 - `src/utils/HijriDate.ts` — Hijri calendar conversion and Islamic key date detection
 - `src/utils/MalayDictionary.ts` — Central dictionary for Malay language terms (prayer names, Hijri months, UI labels)
 - `src/utils/UISounds.ts` — Web Audio API-based UI feedback sounds (toggle clicks, checkbox ticks)

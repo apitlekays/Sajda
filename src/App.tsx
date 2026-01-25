@@ -4,6 +4,7 @@ import { Dashboard } from "./components/Dashboard";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useTrackerStore } from "./store/TrackerStore";
 import { useSettingsStore } from "./store/SettingsStore";
+import { initAnalytics, trackAppOpen, flushAnalytics } from "./utils/Analytics";
 
 function App() {
   const { loadRecords } = useTrackerStore();
@@ -12,15 +13,30 @@ function App() {
   useEffect(() => {
     // Load persisted data on mount
     loadRecords();
-    loadSettings();
+    loadSettings().then(() => {
+      // Initialize analytics after settings are loaded (to get telemetry preference)
+      const { telemetryEnabled } = useSettingsStore.getState();
+      initAnalytics(telemetryEnabled).then(() => {
+        trackAppOpen();
+      });
+    });
 
     // Disable Right Click
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
     document.addEventListener("contextmenu", handleContextMenu);
+
+    // Flush analytics on app close
+    const handleBeforeUnload = () => {
+      flushAnalytics();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
       document.removeEventListener("contextmenu", handleContextMenu);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      flushAnalytics();
     };
   }, []);
 

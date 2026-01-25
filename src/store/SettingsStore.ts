@@ -39,6 +39,10 @@ interface SettingsState {
     // Calculation Method
     calculationMethod: string;
     setCalculationMethod: (method: string) => Promise<void>;
+
+    // Telemetry (opt-out, enabled by default)
+    telemetryEnabled: boolean;
+    toggleTelemetry: () => Promise<void>;
 }
 
 const NEXT_MODE: Record<AudioMode, AudioMode> = {
@@ -54,6 +58,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     reminderTimes: ["09:00", "21:00"],
     alkahfEnabled: true,
     ramadhanCountdown: true,
+    telemetryEnabled: true, // Opt-out: enabled by default
 
     adhanSelection: 'Nasser',
     calculationMethod: 'JAKIM',
@@ -70,6 +75,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             const ramadhanVal = await store.get<boolean>('ramadhan_countdown');
             const adhanVal = await store.get<AdhanVoice>('adhan_selection');
             const calcVal = await store.get<string>('calculation_method');
+            const telemetryVal = await store.get<boolean>('telemetry_enabled');
 
             set({
                 audioSettings: val || {
@@ -87,6 +93,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
                 ramadhanCountdown: ramadhanVal !== null ? ramadhanVal : true,
                 adhanSelection: adhanVal || 'Nasser', // Default to Nasser
                 calculationMethod: calcVal || 'JAKIM',
+                telemetryEnabled: telemetryVal !== null ? telemetryVal : true, // Opt-out: default ON
                 isLoading: false
             });
         } catch (e) {
@@ -233,6 +240,24 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await invoke('update_calculation_method', { method });
         } catch (e) {
             console.error("Failed to set calculation method:", e);
+        }
+    },
+
+    toggleTelemetry: async () => {
+        const { telemetryEnabled } = get();
+        const newState = !telemetryEnabled;
+        set({ telemetryEnabled: newState });
+
+        // Update analytics state
+        const { setAnalyticsEnabled } = await import('../utils/Analytics');
+        setAnalyticsEnabled(newState);
+
+        try {
+            const store = await load(STORE_PATH);
+            await store.set('telemetry_enabled', newState);
+            await store.save();
+        } catch (e) {
+            console.error("Failed to save telemetry setting:", e);
         }
     }
 }));

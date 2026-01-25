@@ -7,11 +7,20 @@ import { usePrayerStore } from "../store/PrayerStore";
 import { useTrackerStore } from "../store/TrackerStore";
 import { useSettingsStore, AudioMode } from "../store/SettingsStore";
 import { useReminderStore } from "../store/ReminderStore";
-import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart, Info, LogOut, Moon } from "lucide-react";
+import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart, Info, LogOut, Moon, BarChart2 } from "lucide-react";
 import { ZONE_MAPPING } from "../utils/ZoneData";
 import { getIslamicKeyDateMessages } from "../utils/HijriDate";
 import { playToggleSound, playCheckSound } from "../utils/UISounds";
 import { HIJRI_MONTHS, getPrayerDisplayName, PrayerKey } from "../utils/MalayDictionary";
+import {
+    trackAudioModeChanged,
+    trackPrayerChecked,
+    trackReminderShown,
+    trackReminderDismissed,
+    trackSettingChanged,
+    setUserRegion,
+    setCalculationMethod as setAnalyticsCalculationMethod
+} from "../utils/Analytics";
 
 export const Dashboard = () => {
     const { todayTimes, nextPrayer, fetchTimes, updateCountdown, loading, zone } = usePrayerStore();
@@ -24,7 +33,8 @@ export const Dashboard = () => {
         alkahfEnabled, toggleAlKahf,
         ramadhanCountdown, toggleRamadhanCountdown,
         adhanSelection, setAdhanSelection,
-        calculationMethod, setCalculationMethod
+        calculationMethod, setCalculationMethod,
+        telemetryEnabled, toggleTelemetry
     } = useSettingsStore();
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -70,6 +80,7 @@ export const Dashboard = () => {
             unlisten = await listen<string>("reminder-trigger", async () => {
                 try {
                     const reminder = await triggerNewReminder();
+                    trackReminderShown(reminder.type as 'hadith' | 'dua');
 
                     // Send notification as visual/audio alert
                     const hasPermission = await isPermissionGranted();
@@ -109,6 +120,13 @@ export const Dashboard = () => {
             store.cleanup();
         };
     }, [fetchTimes]);
+
+    // Track zone for analytics (region-level only)
+    useEffect(() => {
+        if (zone) {
+            setUserRegion(zone);
+        }
+    }, [zone]);
 
     // 2. Countdown Interval
     useEffect(() => {
@@ -205,7 +223,7 @@ export const Dashboard = () => {
                             <span className="text-[10px] text-muted-foreground leading-tight">Hadith & Zikr notifications</span>
                         </div>
                         <button
-                            onClick={toggleReminders}
+                            onClick={() => { toggleReminders(); trackSettingChanged('daily_reminders', !remindersEnabled); }}
                             className={cn(
                                 "w-9 h-5 rounded-full transition-colors relative",
                                 remindersEnabled ? "bg-primary" : "bg-muted"
@@ -241,7 +259,7 @@ export const Dashboard = () => {
                                     </span>
                                 </div>
                                 <button
-                                    onClick={toggleRandomReminders}
+                                    onClick={() => { toggleRandomReminders(); trackSettingChanged('random_reminders', !randomReminders); }}
                                     className={cn(
                                         "w-9 h-5 rounded-full transition-colors relative",
                                         randomReminders ? "bg-primary" : "bg-muted"
@@ -309,7 +327,7 @@ export const Dashboard = () => {
                             <span className="text-[10px] text-muted-foreground leading-tight">Surah Al-Kahf at Zohor/Jumaat</span>
                         </div>
                         <button
-                            onClick={toggleAlKahf}
+                            onClick={() => { toggleAlKahf(); trackSettingChanged('jumuah_reminder', !alkahfEnabled); }}
                             className={cn(
                                 "w-9 h-5 rounded-full transition-colors relative",
                                 alkahfEnabled ? "bg-emerald-500" : "bg-muted"
@@ -329,7 +347,7 @@ export const Dashboard = () => {
                             <span className="text-[10px] text-muted-foreground leading-tight">Countdowns and reminders for key dates</span>
                         </div>
                         <button
-                            onClick={toggleRamadhanCountdown}
+                            onClick={() => { toggleRamadhanCountdown(); trackSettingChanged('islamic_key_dates', !ramadhanCountdown); }}
                             className={cn(
                                 "w-9 h-5 rounded-full transition-colors relative",
                                 ramadhanCountdown ? "bg-emerald-500" : "bg-muted"
@@ -415,7 +433,12 @@ export const Dashboard = () => {
                         <span className="text-sm font-medium">Calculation Method</span>
                         <select
                             value={calculationMethod}
-                            onChange={(e) => setCalculationMethod(e.target.value)}
+                            onChange={(e) => {
+                                const method = e.target.value;
+                                setCalculationMethod(method);
+                                setAnalyticsCalculationMethod(method);
+                                trackSettingChanged('calculation_method', method);
+                            }}
                             className="w-full p-2 rounded-md bg-muted/40 border border-muted-foreground/20 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                         >
                             <option value="JAKIM">JAKIM (Malaysia)</option>
@@ -436,6 +459,29 @@ export const Dashboard = () => {
                     </div>
 
                     <div className="h-px bg-border my-2" />
+
+                    {/* Telemetry */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                                <BarChart2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                <span className="text-sm font-medium">Analytics</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground leading-tight">Help improve Sajda with anonymous usage data</span>
+                        </div>
+                        <button
+                            onClick={() => { playToggleSound(); toggleTelemetry(); }}
+                            className={cn(
+                                "w-9 h-5 rounded-full transition-colors relative",
+                                telemetryEnabled ? "bg-primary" : "bg-muted"
+                            )}
+                        >
+                            <div className={cn(
+                                "absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200",
+                                telemetryEnabled ? "left-5" : "left-1"
+                            )} />
+                        </button>
+                    </div>
 
                 </div>
 
@@ -572,7 +618,13 @@ export const Dashboard = () => {
                             {/* Left: Audio Toggle (Hidden for Syuruk) */}
                             {p !== "syuruk" ? (
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); playToggleSound(); cycleAudioMode(p); }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        playToggleSound();
+                                        const nextMode = getMode(p) === 'mute' ? 'chime' : getMode(p) === 'chime' ? 'adhan' : 'mute';
+                                        cycleAudioMode(p);
+                                        trackAudioModeChanged(p, nextMode);
+                                    }}
                                     className="p-1.5 hover:bg-background/50 rounded-full transition-colors"
                                 >
                                     {getAudioIcon(audioMode)}
@@ -590,7 +642,11 @@ export const Dashboard = () => {
                             {/* Right: Circular Checkbox (Hidden for Syuruk) */}
                             {p !== "syuruk" ? (
                                 <button
-                                    onClick={() => { playCheckSound(); togglePrayer(p); }}
+                                    onClick={() => {
+                                        playCheckSound();
+                                        togglePrayer(p);
+                                        trackPrayerChecked(p, !checked);
+                                    }}
                                     className={cn(
                                         "w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-200",
                                         checked
@@ -620,7 +676,7 @@ export const Dashboard = () => {
                                     {activeReminder.type === 'hadith' ? <BookOpen className="w-4 h-4" /> : <Quote className="w-4 h-4" />}
                                     <span className="font-semibold text-sm">{activeReminder.title}</span>
                                 </div>
-                                <button onClick={closeModal} className="hover:bg-destructive/10 hover:text-destructive p-1 rounded transition-colors">
+                                <button onClick={() => { closeModal(); trackReminderDismissed(); }} className="hover:bg-destructive/10 hover:text-destructive p-1 rounded transition-colors">
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
