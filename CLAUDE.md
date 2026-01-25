@@ -147,6 +147,7 @@ All Malay language terms are centralized in `src/utils/MalayDictionary.ts` for c
 - `src/store/ReminderStore.ts` — Reminder content generation (hadith/dua) and modal state
 - `src/store/SettingsStore.ts` — Persisted user settings (audio, reminders, key dates, calculation method)
 - `src/store/TrackerStore.ts` — Prayer habit tracker (date-keyed daily checkboxes)
+- `src/store/UpdateStore.ts` — Auto-update state management (check, download, install)
 
 ### Utilities
 - `src/utils/Analytics.ts` — PostHog analytics integration (opt-out, EU-hosted)
@@ -193,6 +194,25 @@ PostHog is used for analytics and error tracking (EU-hosted for GDPR compliance)
 - Opt-out model: enabled by default, user can disable in settings
 - `initAnalytics(telemetryEnabled)` respects user preference
 - `setAnalyticsEnabled()` toggles capture on/off
+
+## Auto-Update System
+
+The app uses `@tauri-apps/plugin-updater` to check for and install updates from GitHub releases.
+
+### Update Checking
+- **Initial check:** 5 seconds after app launch (to not block initial render)
+- **Periodic check:** Every 6 hours while the app is running
+- Update checks are silent — errors are logged but not shown to users
+
+### Update Endpoint
+Configured in `tauri.conf.json` under `plugins.updater.endpoints`:
+```
+https://github.com/apitlekays/Sajda/releases/latest/download/latest.json
+```
+
+### Key Files
+- `src/store/UpdateStore.ts` — State management for update checking and installation
+- `src/components/Dashboard.tsx` — Periodic update check logic (useEffect with interval)
 
 ## Release Workflow
 

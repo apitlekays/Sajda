@@ -153,12 +153,23 @@ export const Dashboard = () => {
         return () => clearInterval(interval);
     }, [updateCountdown]);
 
-    // 3. Check for updates on mount (with delay to not block initial render)
+    // 3. Check for updates on mount and every 6 hours
     useEffect(() => {
-        const timer = setTimeout(() => {
+        // Initial check with delay to not block initial render
+        const initialTimer = setTimeout(() => {
             checkForUpdates();
         }, 5000);
-        return () => clearTimeout(timer);
+
+        // Periodic check every 6 hours (6 * 60 * 60 * 1000 = 21600000ms)
+        const interval = setInterval(() => {
+            console.log('Checking for updates (periodic 6h check)...');
+            checkForUpdates();
+        }, 6 * 60 * 60 * 1000);
+
+        return () => {
+            clearTimeout(initialTimer);
+            clearInterval(interval);
+        };
     }, [checkForUpdates]);
 
 

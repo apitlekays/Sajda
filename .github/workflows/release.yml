@@ -15,8 +15,12 @@ jobs:
         include:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
+            arch: 'aarch64'
+            target: 'aarch64-apple-darwin'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
+            arch: 'x64'
+            target: 'x86_64-apple-darwin'
 
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 45
@@ -72,4 +76,112 @@ jobs:
           releaseBody: 'See release notes for details.'
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
+
+      - name: Upload signature file to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          SIG_FILE="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Sajda.app.tar.gz.sig"
+
+          if [ -f "$SIG_FILE" ]; then
+            echo "Found signature file: $SIG_FILE"
+            cp "$SIG_FILE" "Sajda_${{ matrix.arch }}.app.tar.gz.sig"
+            gh release upload "v${VERSION}" "Sajda_${{ matrix.arch }}.app.tar.gz.sig" --clobber
+            echo "Uploaded signature for ${{ matrix.arch }}"
+          else
+            echo "Signature file not found: $SIG_FILE"
+            ls -la src-tauri/target/${{ matrix.target }}/release/bundle/macos/ || true
+          fi
+
+  publish-updater:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Wait for assets and download signatures
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p ./signatures
+
+          for i in {1..10}; do
+            echo "Attempt $i: Downloading signature files..."
+            gh release download "v${VERSION}" --pattern "*.sig" --dir ./signatures --clobber 2>/dev/null || true
+
+            if [ -f "./signatures/Sajda_aarch64.app.tar.gz.sig" ] && [ -f "./signatures/Sajda_x64.app.tar.gz.sig" ]; then
+              echo "Both signature files found!"
+              break
+            fi
+
+            echo "Waiting for signature files..."
+            sleep 10
+          done
+
+          ls -la ./signatures/
+
+      - name: Generate and upload latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          REPO="${{ github.repository }}"
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          AARCH64_SIG=""
+          X64_SIG=""
+
+          if [ -f "./signatures/Sajda_aarch64.app.tar.gz.sig" ]; then
+            AARCH64_SIG=$(cat ./signatures/Sajda_aarch64.app.tar.gz.sig)
+            echo "Found aarch64 signature"
+          else
+            echo "WARNING: aarch64 signature not found"
+          fi
+
+          if [ -f "./signatures/Sajda_x64.app.tar.gz.sig" ]; then
+            X64_SIG=$(cat ./signatures/Sajda_x64.app.tar.gz.sig)
+            echo "Found x64 signature"
+          else
+            echo "WARNING: x64 signature not found"
+          fi
+
+          # Use jq to generate valid JSON
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "See release notes for details." \
+            --arg pub_date "$PUB_DATE" \
+            --arg aarch64_sig "$AARCH64_SIG" \
+            --arg aarch64_url "https://github.com/${REPO}/releases/download/v${VERSION}/Sajda_aarch64.app.tar.gz" \
+            --arg x64_sig "$X64_SIG" \
+            --arg x64_url "https://github.com/${REPO}/releases/download/v${VERSION}/Sajda_x64.app.tar.gz" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": {
+                  signature: $aarch64_sig,
+                  url: $aarch64_url
+                },
+                "darwin-x86_64": {
+                  signature: $x64_sig,
+                  url: $x64_url
+                }
+              }
+            }' > latest.json
+
+          echo "Generated latest.json:"
+          cat latest.json
+
+          gh release upload "v${VERSION}" latest.json --clobber
+          echo "Uploaded latest.json to release"

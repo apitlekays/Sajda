@@ -64,12 +64,9 @@
 
 ## 🚀 Installation
 
-Download the latest `.dmg` from [Releases](https://github.com/dochafiz/Sajda/releases) and drag the `.app` to your Applications folder.
+Download the latest `.dmg` from [Releases](https://github.com/apitlekays/Sajda/releases) and drag the `.app` to your Applications folder.
 
-> **Note:** Since the app is not code-signed, macOS may block it. Run this in Terminal after installing:
-> ```bash
-> xattr -cr /Applications/Sajda.app
-> ```
+The app is code-signed with a Developer ID certificate and supports automatic updates.
 
 ## 🛠 Tech Stack
 
