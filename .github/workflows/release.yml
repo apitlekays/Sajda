@@ -19,6 +19,7 @@ jobs:
             args: '--target x86_64-apple-darwin'
 
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
