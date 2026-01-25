@@ -7,7 +7,8 @@ import { usePrayerStore } from "../store/PrayerStore";
 import { useTrackerStore } from "../store/TrackerStore";
 import { useSettingsStore, AudioMode } from "../store/SettingsStore";
 import { useReminderStore } from "../store/ReminderStore";
-import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart, Info, LogOut, Moon, BarChart2 } from "lucide-react";
+import { useUpdateStore } from "../store/UpdateStore";
+import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart, Info, LogOut, Moon, BarChart2, Download, RefreshCw } from "lucide-react";
 import { ZONE_MAPPING } from "../utils/ZoneData";
 import { getIslamicKeyDateMessages } from "../utils/HijriDate";
 import { playToggleSound, playCheckSound } from "../utils/UISounds";
@@ -26,6 +27,14 @@ export const Dashboard = () => {
     const { todayTimes, nextPrayer, fetchTimes, updateCountdown, loading, zone } = usePrayerStore();
     const { isChecked, togglePrayer } = useTrackerStore();
     const { activeReminder, isModalOpen, closeModal, openModal, triggerNewReminder } = useReminderStore();
+    const {
+        updateAvailable,
+        isDownloading,
+        downloadProgress,
+        checkForUpdates,
+        downloadAndInstall,
+        dismissUpdate
+    } = useUpdateStore();
     const { getMode, cycleAudioMode,
         remindersEnabled, toggleReminders,
         randomReminders, toggleRandomReminders,
@@ -143,6 +152,14 @@ export const Dashboard = () => {
         }, 1000);
         return () => clearInterval(interval);
     }, [updateCountdown]);
+
+    // 3. Check for updates on mount (with delay to not block initial render)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            checkForUpdates();
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [checkForUpdates]);
 
 
 
@@ -776,6 +793,45 @@ export const Dashboard = () => {
                     </div>
                 )
             }
+            {/* Update Available Banner */}
+            {updateAvailable && (
+                <div className="absolute bottom-16 left-4 right-4 bg-primary/10 border border-primary/20 rounded-lg p-3 z-40">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Download className="w-4 h-4 text-primary" />
+                            <div>
+                                <p className="text-sm font-medium">Update Available</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                    v{updateAvailable.version} ready to install
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={dismissUpdate}
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                Later
+                            </button>
+                            <button
+                                onClick={downloadAndInstall}
+                                disabled={isDownloading}
+                                className="px-3 py-1.5 bg-primary text-primary-foreground text-xs rounded-md hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                            >
+                                {isDownloading ? (
+                                    <>
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                        {Math.round(downloadProgress)}%
+                                    </>
+                                ) : (
+                                    'Update Now'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Footer / Location & Version */}
             <div className="mt-auto py-2 flex flex-col items-center gap-0.5 px-2">
                 <div className="w-full flex items-center justify-between">

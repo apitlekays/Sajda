@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Sajda",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "identifier": "net.hafizhanif.sajda",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.waktusolat.app https://eu.i.posthog.com"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.waktusolat.app https://eu.i.posthog.com https://github.com"
     },
     "macOSPrivateApi": true
   },
@@ -40,6 +40,17 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "Developer ID Application: SiagaX Industries (M) Sdn. Bhd. (SGT97Q7B97)"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFCNjEyQTc4NEE0M0UxMDYKUldRRzRVTktlQ3BoRzE1MmlHeWN0ZWRCY3VFdEd0SVJRTitOTFVrSGFhNEtERzE1c083RDdSZ28K",
+      "endpoints": [
+        "https://github.com/apitlekays/Sajda/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
