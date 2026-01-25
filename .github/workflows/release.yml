@@ -61,24 +61,6 @@ jobs:
           security set-keychain-settings -t 3600 -u build.keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
-      - name: Debug signing key presence
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "✅ TAURI_SIGNING_PRIVATE_KEY is set (length: ${#TAURI_SIGNING_PRIVATE_KEY} chars)"
-            echo "First 20 chars: ${TAURI_SIGNING_PRIVATE_KEY:0:20}..."
-          else
-            echo "❌ TAURI_SIGNING_PRIVATE_KEY is NOT set or empty!"
-          fi
-
-          if [ -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
-            echo "✅ TAURI_SIGNING_PRIVATE_KEY_PASSWORD is set (length: ${#TAURI_SIGNING_PRIVATE_KEY_PASSWORD} chars)"
-          else
-            echo "⚠️ TAURI_SIGNING_PRIVATE_KEY_PASSWORD is NOT set (may be intentional if key has no password)"
-          fi
-
       - name: Build and Release
         id: tauri
         uses: tauri-apps/tauri-action@v0
@@ -96,46 +78,35 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
-          args: ${{ matrix.args }} --verbose
+          args: ${{ matrix.args }}
 
-      - name: Find and upload signature file
+      - name: Sign and upload signature file
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
 
-          echo "Looking for signature files in build directory..."
-          find src-tauri/target -name "*.sig" -type f 2>/dev/null || true
+          echo "Downloading tar.gz from release..."
+          gh release download "v${VERSION}" --pattern "Sajda_${{ matrix.arch }}.app.tar.gz" --dir . || {
+            echo "Failed to download, waiting and retrying..."
+            sleep 10
+            gh release download "v${VERSION}" --pattern "Sajda_${{ matrix.arch }}.app.tar.gz" --dir .
+          }
 
-          # Try multiple possible locations
-          SIG_FILE=""
-          for path in \
-            "src-tauri/target/${{ matrix.target }}/release/bundle/macos/Sajda.app.tar.gz.sig" \
-            "src-tauri/target/release/bundle/macos/Sajda.app.tar.gz.sig" \
-            "src-tauri/target/${{ matrix.target }}/release/bundle/macos/Sajda.app.tar.gz.sig"
-          do
-            if [ -f "$path" ]; then
-              SIG_FILE="$path"
-              echo "Found signature file: $SIG_FILE"
-              break
-            fi
-          done
+          ls -la Sajda_${{ matrix.arch }}.app.tar.gz
 
-          if [ -n "$SIG_FILE" ]; then
-            # Copy with architecture-specific name
-            cp "$SIG_FILE" "Sajda_${{ matrix.arch }}.app.tar.gz.sig"
-            echo "Signature content:"
-            cat "Sajda_${{ matrix.arch }}.app.tar.gz.sig"
+          echo "Signing the tar.gz file..."
+          # Use tauri CLI to sign the file
+          npx tauri signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "Sajda_${{ matrix.arch }}.app.tar.gz"
 
-            # Upload to release
-            gh release upload "v${VERSION}" "Sajda_${{ matrix.arch }}.app.tar.gz.sig" --clobber
-            echo "Uploaded signature for ${{ matrix.arch }}"
-          else
-            echo "ERROR: Signature file not found!"
-            echo "Listing bundle directory contents:"
-            ls -laR src-tauri/target/${{ matrix.target }}/release/bundle/ 2>/dev/null || echo "Bundle directory not found"
-            exit 1
-          fi
+          echo "Signature content:"
+          cat "Sajda_${{ matrix.arch }}.app.tar.gz.sig"
+
+          echo "Uploading signature to release..."
+          gh release upload "v${VERSION}" "Sajda_${{ matrix.arch }}.app.tar.gz.sig" --clobber
+          echo "Uploaded signature for ${{ matrix.arch }}"
 
   publish-updater:
     needs: release
