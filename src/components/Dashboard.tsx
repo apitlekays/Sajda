@@ -50,6 +50,7 @@ export const Dashboard = () => {
     } = useSettingsStore();
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isCreditsOpen, setIsCreditsOpen] = useState(false);
     const [playingPreview, setPlayingPreview] = useState<string | null>(null);
     const [newReminderTime, setNewReminderTime] = useState("");
     const [permissionDenied, setPermissionDenied] = useState(false);
@@ -624,10 +625,119 @@ export const Dashboard = () => {
                 </div>
 
                 {/* Credit Footer */}
+                <div className="pt-1 text-[10px] text-muted-foreground/60">
+                    <div className="flex items-center justify-between px-2">
+                        <p className="flex items-center gap-1">
+                            Developed with <Heart className="w-3 h-3 text-red-400 fill-red-400" /> by Hafiz Hanif, PhD.
+                        </p>
+                        <button
+                            onClick={() => setIsCreditsOpen(true)}
+                            className="hover:text-primary transition-colors underline-offset-2 hover:underline"
+                        >
+                            Credits
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Credits Drawer */}
+            <div
+                className={cn(
+                    "fixed inset-0 z-[60] bg-background/95 backdrop-blur-xl flex flex-col p-4 space-y-2",
+                    isMounted ? "transition-transform duration-300 ease-in-out" : "duration-0",
+                    isCreditsOpen ? "translate-x-0" : "translate-x-full"
+                )}
+            >
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold font-buda">Credits</h2>
+                    <button onClick={() => setIsCreditsOpen(false)} className="p-1.5 hover:bg-muted rounded-full">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-4 px-3 py-3 rounded-lg bg-muted/30 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    {/* Thank You Message */}
+                    <div className="text-center space-y-2 py-3">
+                        <p className="text-sm text-foreground leading-relaxed">
+                            Sajda is built with love using amazing open-source software.
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Thank you to all the developers and contributors who made this possible.
+                        </p>
+                    </div>
+
+                    <div className="h-px bg-border" />
+
+                    {/* Frontend Dependencies */}
+                    <div className="space-y-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Frontend</h3>
+                        <div className="space-y-1.5">
+                            {[
+                                { name: "React", license: "MIT", url: "https://react.dev" },
+                                { name: "Vite", license: "MIT", url: "https://vitejs.dev" },
+                                { name: "TypeScript", license: "Apache-2.0", url: "https://typescriptlang.org" },
+                                { name: "Tailwind CSS", license: "MIT", url: "https://tailwindcss.com" },
+                                { name: "Zustand", license: "MIT", url: "https://zustand-demo.pmnd.rs" },
+                                { name: "Framer Motion", license: "MIT", url: "https://framer.com/motion" },
+                                { name: "Lucide Icons", license: "ISC", url: "https://lucide.dev" },
+                                { name: "date-fns", license: "MIT", url: "https://date-fns.org" },
+                                { name: "Axios", license: "MIT", url: "https://axios-http.com" },
+                                { name: "PostHog", license: "MIT", url: "https://posthog.com" },
+                            ].map((dep) => (
+                                <div key={dep.name} className="flex items-center justify-between py-1 px-2 rounded bg-muted/20">
+                                    <span className="text-xs font-medium">{dep.name}</span>
+                                    <span className="text-[10px] text-muted-foreground font-mono">{dep.license}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="h-px bg-border" />
+
+                    {/* Backend Dependencies */}
+                    <div className="space-y-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Backend (Rust)</h3>
+                        <div className="space-y-1.5">
+                            {[
+                                { name: "Tauri", license: "MIT/Apache-2.0", url: "https://tauri.app" },
+                                { name: "Tokio", license: "MIT", url: "https://tokio.rs" },
+                                { name: "Rodio", license: "MIT/Apache-2.0", url: "https://github.com/RustAudio/rodio" },
+                                { name: "Salah", license: "MIT", url: "https://github.com/insha/salah" },
+                                { name: "Chrono", license: "MIT/Apache-2.0", url: "https://github.com/chronotope/chrono" },
+                                { name: "Reqwest", license: "MIT/Apache-2.0", url: "https://github.com/seanmonstar/reqwest" },
+                                { name: "Serde", license: "MIT/Apache-2.0", url: "https://serde.rs" },
+                                { name: "swift-rs", license: "MIT/Apache-2.0", url: "https://github.com/Brendonovich/swift-rs" },
+                            ].map((dep) => (
+                                <div key={dep.name} className="flex items-center justify-between py-1 px-2 rounded bg-muted/20">
+                                    <span className="text-xs font-medium">{dep.name}</span>
+                                    <span className="text-[10px] text-muted-foreground font-mono">{dep.license}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="h-px bg-border" />
+
+                    {/* Data Sources */}
+                    <div className="space-y-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Data Sources</h3>
+                        <div className="space-y-1.5">
+                            {[
+                                { name: "WaktuSolat.app API", desc: "Malaysian prayer times (JAKIM)" },
+                                { name: "ipapi.co", desc: "IP geolocation fallback" },
+                            ].map((src) => (
+                                <div key={src.name} className="py-1 px-2 rounded bg-muted/20">
+                                    <span className="text-xs font-medium">{src.name}</span>
+                                    <p className="text-[10px] text-muted-foreground">{src.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer */}
                 <div className="pt-1 text-center text-[10px] text-muted-foreground/60">
-                    <p className="flex items-center justify-center gap-1">
-                        Developed with <Heart className="w-3 h-3 text-red-400 fill-red-400" /> by Hafiz Hanif, PhD.
-                    </p>
+                    <p>Open source makes the world better.</p>
                 </div>
             </div>
 
