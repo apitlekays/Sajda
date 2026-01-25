@@ -1,7 +1,7 @@
 {
   "name": "sajda",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,9 +13,13 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "test:rust": "cd src-tauri && cargo test",
-    "test:all": "npm test && npm run test:rust"
+    "test:all": "npm test && npm run test:rust",
+    "sourcemap:inject": "posthog-cli sourcemap inject --directory ./dist/assets --project sajda --version $npm_package_version",
+    "sourcemap:upload": "posthog-cli sourcemap upload --directory ./dist/assets --host https://eu.posthog.com",
+    "sourcemap:release": "npm run sourcemap:inject && npm run sourcemap:upload"
   },
   "dependencies": {
+    "@posthog/react": "^1.7.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-geolocation": "^2.3.2",
@@ -35,6 +39,7 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@posthog/cli": "^0.5.25",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",

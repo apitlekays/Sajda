@@ -12,6 +12,11 @@ Sajda is a macOS menu bar application for Islamic prayer times and reminders. Bu
 
 ## Commands
 
+**IMPORTANT:** Vite 7 requires Node.js 20.19+ or 22.12+. Before running any npm commands:
+```bash
+source ~/.nvm/nvm.sh && nvm use 22.22.0
+```
+
 - `npm run dev` — Start Vite dev server (port 1420)
 - `npm run build` — TypeScript check + Vite production build
 - `npm run tauri dev` — Run full Tauri app in development
@@ -124,3 +129,88 @@ All Malay language terms are centralized in `src/utils/MalayDictionary.ts` for c
 - `src-tauri/src/scheduler.rs` — Background task scheduling (prayer triggers, daily reminders)
 - `src-tauri/src/settings.rs` — Rust-side settings deserialization
 - `src-tauri/tauri.conf.json` — App window/bundle configuration
+
+## Analytics & Error Tracking
+
+PostHog is used for analytics and error tracking (EU-hosted for GDPR compliance).
+
+### Setup
+- `PostHogProvider` wraps the app in `main.tsx` with `capture_exceptions: true`
+- `PostHogErrorBoundary` in `ErrorBoundary.tsx` captures React render errors
+- Global error handlers in `App.tsx` catch uncaught errors and unhandled rejections
+- Manual `trackError()` calls in stores for caught exceptions
+
+### Error Types in PostHog
+| Error Type | Source | Description |
+|------------|--------|-------------|
+| `$exception` | PostHogErrorBoundary | React component crashes |
+| `uncaught_error` | App.tsx global handler | Uncaught JS errors |
+| `unhandled_rejection` | App.tsx global handler | Unhandled promise rejections |
+| `settings_load` / `settings_save` | SettingsStore | Settings persistence failures |
+| `tracker_load` / `tracker_save` | TrackerStore | Prayer tracker persistence failures |
+| `location_detection` | PrayerStore | Zone detection failures |
+| `prayer_fetch` | PrayerStore | Prayer times fetch failures |
+
+### Telemetry
+- Opt-out model: enabled by default, user can disable in settings
+- `initAnalytics(telemetryEnabled)` respects user preference
+- `setAnalyticsEnabled()` toggles capture on/off
+
+## Release Workflow
+
+**IMPORTANT:** Every release requires source map upload for readable error stack traces in PostHog.
+
+### First-Time Setup
+```bash
+# Authenticate with PostHog CLI (EU region)
+npx posthog-cli login --host https://eu.posthog.com
+```
+
+For CI/CD, set environment variables instead:
+- `POSTHOG_CLI_HOST` = `https://eu.posthog.com`
+- `POSTHOG_CLI_ENV_ID` = PostHog project ID
+- `POSTHOG_CLI_TOKEN` = Personal API key with error tracking write permissions
+
+### Release Steps
+```bash
+# 1. Bump version in package.json
+
+# 2. Build frontend (generates source maps)
+npm run build
+
+# 3. Inject metadata + upload source maps to PostHog
+npm run sourcemap:release
+
+# 4. Build Tauri app (uses the injected dist/)
+npm run tauri build
+```
+
+### Source Map Scripts
+- `npm run sourcemap:inject` — Inject metadata into built files (uses package.json version)
+- `npm run sourcemap:upload` — Upload source maps to PostHog EU
+- `npm run sourcemap:release` — Both inject + upload
+
+### Why Source Maps Matter
+Each build produces unique minified code with different chunk hashes. Without uploading source maps for each release, PostHog will show minified stack traces like `index-abc123.js:1:2345` instead of readable locations like `Dashboard.tsx:142`.
+
+## Versioning
+
+**Format:** Semantic Versioning + commit ID: `vX.Y.Z (abcdef)`
+
+### Version Locations
+Version must be synchronized across:
+- `package.json` — `"version": "X.Y.Z"`
+- `src-tauri/tauri.conf.json` — `"version": "X.Y.Z"`
+- `src-tauri/Cargo.toml` — `version = "X.Y.Z"`
+
+### Version Bump Rules
+- **Patch (0.0.X):** Auto-bump on every README/CLAUDE.md update + git commit/push
+- **Minor (0.X.0):** Only when explicitly requested (new features)
+- **Major (X.0.0):** Only when explicitly requested (breaking changes)
+
+### On Commit Workflow
+When asked to "update readme, claude.md, and git commit/push":
+1. Make documentation changes
+2. Bump patch version in all 3 files
+3. Stage and commit with message including version
+4. Push to remote

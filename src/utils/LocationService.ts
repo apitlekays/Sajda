@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getCurrentPosition, checkPermissions, requestPermissions } from "@tauri-apps/plugin-geolocation";
+import { useSettingsStore } from "../store/SettingsStore";
 
 const API_BASE = "https://api.waktusolat.app/v2/solat";
 
@@ -22,23 +23,30 @@ export const LocationService = {
         let lng = 0;
 
         try {
-            console.log("Checking Location Permissions...");
-            try {
-                let permission = await checkPermissions();
-                if (permission.location === 'prompt' || permission.location === 'prompt-with-rationale') {
-                    await requestPermissions(['location']);
+            const { locationEnabled } = useSettingsStore.getState();
+
+            // Only attempt native geolocation if user has enabled it
+            if (locationEnabled) {
+                console.log("Checking Location Permissions...");
+                try {
+                    let permission = await checkPermissions();
+                    if (permission.location === 'prompt' || permission.location === 'prompt-with-rationale') {
+                        await requestPermissions(['location']);
+                    }
+                } catch (e) {
+                    console.warn("Permission check failed:", e);
                 }
-            } catch (e) {
-                console.warn("Permission check failed:", e);
+
+                console.log("Requesting Location Position via Tauri Plugin...");
+                const position = await getCurrentPosition({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+
+                lat = position?.coords?.latitude || 0;
+                lng = position?.coords?.longitude || 0;
+
+                console.log(`Plugin Detected Coords: Lat ${lat}, Lng ${lng}`);
+            } else {
+                console.log("Location services disabled by user, using IP fallback...");
             }
-
-            console.log("Requesting Location Position via Tauri Plugin...");
-            const position = await getCurrentPosition({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-
-            lat = position?.coords?.latitude || 0;
-            lng = position?.coords?.longitude || 0;
-
-            console.log(`Plugin Detected Coords: Lat ${lat}, Lng ${lng}`);
 
             // IP Fallback
             if (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01) {
@@ -74,6 +82,13 @@ export const LocationService = {
     },
 
     async getCoordinates(): Promise<{ lat: number, lng: number } | null> {
+        const { locationEnabled } = useSettingsStore.getState();
+
+        if (!locationEnabled) {
+            console.log("Location services disabled by user");
+            return null;
+        }
+
         try {
             const position = await getCurrentPosition({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
             return {

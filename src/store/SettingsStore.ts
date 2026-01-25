@@ -1,10 +1,13 @@
 import { create } from 'zustand';
 import { load } from '@tauri-apps/plugin-store';
+import { trackError } from '../utils/Analytics';
 
 const STORE_PATH = 'settings.json';
 
 export type AudioMode = 'mute' | 'chime' | 'adhan';
 export type AdhanVoice = 'Nasser' | 'Ahmed';
+
+export type LocationPermissionStatus = 'granted' | 'denied' | 'prompt' | 'unknown';
 
 interface SettingsState {
     // Key: prayer name (fajr, etc), Value: mode
@@ -40,9 +43,20 @@ interface SettingsState {
     calculationMethod: string;
     setCalculationMethod: (method: string) => Promise<void>;
 
+    // Location Services
+    locationEnabled: boolean;
+    locationPermissionStatus: LocationPermissionStatus;
+    setLocationEnabled: (enabled: boolean) => Promise<void>;
+    toggleLocation: () => Promise<{ success: boolean; status: LocationPermissionStatus }>;
+    checkLocationPermission: () => Promise<LocationPermissionStatus>;
+
     // Telemetry (opt-out, enabled by default)
     telemetryEnabled: boolean;
     toggleTelemetry: () => Promise<void>;
+
+    // First-run setup
+    setupComplete: boolean;
+    completeSetup: () => Promise<void>;
 }
 
 const NEXT_MODE: Record<AudioMode, AudioMode> = {
@@ -59,10 +73,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     alkahfEnabled: true,
     ramadhanCountdown: true,
     telemetryEnabled: true, // Opt-out: enabled by default
+    setupComplete: false, // First-run detection
 
     adhanSelection: 'Nasser',
     calculationMethod: 'JAKIM',
     isLoading: true,
+
+    // Location Services
+    locationEnabled: false, // Default to false until permission granted
+    locationPermissionStatus: 'unknown',
 
     loadSettings: async () => {
         try {
@@ -76,6 +95,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             const adhanVal = await store.get<AdhanVoice>('adhan_selection');
             const calcVal = await store.get<string>('calculation_method');
             const telemetryVal = await store.get<boolean>('telemetry_enabled');
+            const setupCompleteVal = await store.get<boolean>('setup_complete');
+            const locationEnabledVal = await store.get<boolean>('location_enabled');
 
             set({
                 audioSettings: val || {
@@ -94,10 +115,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
                 adhanSelection: adhanVal || 'Nasser', // Default to Nasser
                 calculationMethod: calcVal || 'JAKIM',
                 telemetryEnabled: telemetryVal !== null ? telemetryVal : true, // Opt-out: default ON
+                setupComplete: setupCompleteVal === true, // Only true if explicitly set
+                locationEnabled: locationEnabledVal === true, // Only true if explicitly granted
                 isLoading: false
             });
         } catch (e) {
             console.error("Failed to load settings store:", e);
+            trackError('settings_load', e instanceof Error ? e.message : 'Unknown error');
             set({ isLoading: false });
         }
     },
@@ -123,6 +147,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save settings:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save audio settings');
         }
     },
 
@@ -142,6 +167,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save reminders settings:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save reminders');
         }
     },
 
@@ -156,6 +182,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save random reminders setting:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save random reminders');
         }
     },
 
@@ -171,6 +198,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save reminder times:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save reminder times');
         }
     },
 
@@ -185,6 +213,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save reminder times:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to remove reminder time');
         }
     },
 
@@ -199,6 +228,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save alkahf settings:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save alkahf');
         }
     },
 
@@ -213,6 +243,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save ramadhan countdown setting:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save ramadhan countdown');
         }
     },
 
@@ -224,6 +255,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save adhan selection:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save adhan selection');
         }
     },
 
@@ -240,6 +272,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await invoke('update_calculation_method', { method });
         } catch (e) {
             console.error("Failed to set calculation method:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save calculation method');
         }
     },
 
@@ -258,6 +291,97 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save telemetry setting:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save telemetry');
+        }
+    },
+
+    completeSetup: async () => {
+        set({ setupComplete: true });
+        try {
+            const store = await load(STORE_PATH);
+            await store.set('setup_complete', true);
+            await store.save();
+        } catch (e) {
+            console.error("Failed to save setup complete flag:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save setup complete');
+        }
+    },
+
+    // Location Services
+    setLocationEnabled: async (enabled) => {
+        set({ locationEnabled: enabled });
+        try {
+            const store = await load(STORE_PATH);
+            await store.set('location_enabled', enabled);
+            await store.save();
+        } catch (e) {
+            console.error("Failed to save location enabled setting:", e);
+            trackError('settings_save', e instanceof Error ? e.message : 'Failed to save location enabled');
+        }
+    },
+
+    checkLocationPermission: async () => {
+        try {
+            const { checkPermissions } = await import('@tauri-apps/plugin-geolocation');
+            const permission = await checkPermissions();
+            const rawStatus = permission.location;
+            // Map 'prompt-with-rationale' to 'prompt' for our simpler type
+            const status: LocationPermissionStatus = rawStatus === 'prompt-with-rationale' ? 'prompt' :
+                (rawStatus === 'granted' || rawStatus === 'denied' || rawStatus === 'prompt') ? rawStatus : 'unknown';
+            set({ locationPermissionStatus: status });
+            return status;
+        } catch (e) {
+            console.error("Failed to check location permission:", e);
+            set({ locationPermissionStatus: 'unknown' });
+            return 'unknown';
+        }
+    },
+
+    toggleLocation: async () => {
+        const { locationEnabled, setLocationEnabled } = get();
+
+        // If currently enabled, just disable it
+        if (locationEnabled) {
+            await setLocationEnabled(false);
+            return { success: true, status: 'denied' as LocationPermissionStatus };
+        }
+
+        // If trying to enable, check current permission status
+        try {
+            const { checkPermissions, requestPermissions } = await import('@tauri-apps/plugin-geolocation');
+            const currentPermission = await checkPermissions();
+            const currentStatus = currentPermission.location;
+
+            if (currentStatus === 'granted') {
+                // Permission already granted, just enable
+                await setLocationEnabled(true);
+                set({ locationPermissionStatus: 'granted' });
+                return { success: true, status: 'granted' };
+            } else if (currentStatus === 'prompt' || currentStatus === 'prompt-with-rationale') {
+                // Request permission from user
+                const result = await requestPermissions(['location']);
+                const newStatus = result.location as LocationPermissionStatus;
+
+                if (newStatus === 'granted') {
+                    await setLocationEnabled(true);
+                    set({ locationPermissionStatus: 'granted' });
+                    return { success: true, status: 'granted' };
+                } else {
+                    // User denied
+                    set({ locationPermissionStatus: 'denied' });
+                    return { success: false, status: 'denied' };
+                }
+            } else if (currentStatus === 'denied') {
+                // Permission was previously denied - user needs to go to System Settings
+                set({ locationPermissionStatus: 'denied' });
+                return { success: false, status: 'denied' };
+            }
+
+            return { success: false, status: 'unknown' };
+        } catch (e) {
+            console.error("Failed to toggle location:", e);
+            trackError('location_toggle', e instanceof Error ? e.message : 'Failed to toggle location');
+            return { success: false, status: 'unknown' };
         }
     }
 }));

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { load } from '@tauri-apps/plugin-store';
 import { format } from 'date-fns';
+import { trackError } from '../utils/Analytics';
 
 // Define the store file path
 const STORE_PATH = 'tracker.json';
@@ -31,6 +32,7 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
             }
         } catch (e) {
             console.error("Failed to load tracker store:", e);
+            trackError('tracker_load', e instanceof Error ? e.message : 'Failed to load tracker');
             set({ isLoading: false });
         }
     },
@@ -59,6 +61,7 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
             await store.save();
         } catch (e) {
             console.error("Failed to save tracker:", e);
+            trackError('tracker_save', e instanceof Error ? e.message : 'Failed to save tracker');
         }
     },
 

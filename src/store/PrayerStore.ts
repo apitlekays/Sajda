@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { LocationService } from "../utils/LocationService";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { trackError } from "../utils/Analytics";
 
 interface PrayerTime {
     fajr: number;
@@ -66,6 +67,7 @@ export const usePrayerStore = create<PrayerStore>((set, get) => ({
                 }
             } catch (e) {
                 console.error("Zone detection failed", e);
+                trackError('location_detection', e instanceof Error ? e.message : 'Zone detection failed');
             }
 
             // 2. Fetch Times from Rust
@@ -76,6 +78,7 @@ export const usePrayerStore = create<PrayerStore>((set, get) => ({
 
         } catch (error) {
             console.error(error);
+            trackError('prayer_fetch', error instanceof Error ? error.message : 'Failed to fetch prayer times');
             set({ loading: false });
         }
     },

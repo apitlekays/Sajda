@@ -34,7 +34,8 @@ export const Dashboard = () => {
         ramadhanCountdown, toggleRamadhanCountdown,
         adhanSelection, setAdhanSelection,
         calculationMethod, setCalculationMethod,
-        telemetryEnabled, toggleTelemetry
+        telemetryEnabled, toggleTelemetry,
+        locationEnabled, toggleLocation, locationPermissionStatus, checkLocationPermission
     } = useSettingsStore();
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -58,6 +59,13 @@ export const Dashboard = () => {
         window.addEventListener('blur', handleBlur);
         return () => window.removeEventListener('blur', handleBlur);
     }, []);
+
+    // Check location permission status when settings opens
+    useEffect(() => {
+        if (isSettingsOpen) {
+            checkLocationPermission();
+        }
+    }, [isSettingsOpen, checkLocationPermission]);
 
     // ... (rest of code)
 
@@ -457,6 +465,59 @@ export const Dashboard = () => {
                             Use "JAKIM" for official Malaysian times (API). Others use local calculation execution.
                         </p>
                     </div>
+
+                    <div className="h-px bg-border my-2" />
+
+                    {/* Location Services */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                                <Navigation className="w-3.5 h-3.5 text-muted-foreground" />
+                                <span className="text-sm font-medium">Location Services</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground leading-tight">Precise prayer times based on your location</span>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                playToggleSound();
+                                const result = await toggleLocation();
+                                trackSettingChanged('location_services', result.success && result.status === 'granted');
+                            }}
+                            className={cn(
+                                "w-9 h-5 rounded-full transition-colors relative",
+                                locationEnabled ? "bg-primary" : "bg-muted"
+                            )}
+                        >
+                            <div className={cn(
+                                "absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200",
+                                locationEnabled ? "left-5" : "left-1"
+                            )} />
+                        </button>
+                    </div>
+
+                    {/* Location Permission Warning */}
+                    {!locationEnabled && locationPermissionStatus === 'denied' && (
+                        <div className="ml-1 pl-3 border-l-2 border-amber-500/20">
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                                <div className="text-[10px] text-muted-foreground">
+                                    <p className="font-semibold text-amber-500 mb-1">Location Permission Denied</p>
+                                    <p className="leading-relaxed">
+                                        To enable, go to <span className="font-mono bg-muted/50 px-1 rounded">System Settings &gt; Privacy &gt; Location Services &gt; Sajda</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Location Info */}
+                    {locationEnabled && (
+                        <div className="ml-1 pl-3 border-l-2 border-primary/20">
+                            <p className="text-[10px] text-muted-foreground leading-relaxed">
+                                Using GPS for accurate prayer times. Falls back to IP-based location if unavailable.
+                            </p>
+                        </div>
+                    )}
 
                     <div className="h-px bg-border my-2" />
 

@@ -23,7 +23,8 @@
 ### Prayer Times
 - **Accurate Prayer Times** — Directly sourced from JAKIM (Malaysia) or calculated locally (Global).
 - **Multiple Calculation Methods** — JAKIM, MUIS, MWL, ISNA, Umm Al-Qura, and more.
-- **Auto-Location** — Automatically detects your zone for prayer times.
+- **Smart Location** — GPS-based location with user control; falls back to IP geolocation.
+- **Location Toggle** — Enable/disable location services in settings with permission guidance.
 - **Hijri Calendar** — Integrated Islamic calendar display with date header.
 
 ### Menu Bar
@@ -53,6 +54,11 @@
 - **Current Prayer Highlight** — Green highlight on the active prayer period.
 - **Rich Dashboard** — Beautiful, glassmorphic UI with smooth animations.
 - **Native Performance** — Built on Tauri v2 for an ultra-lightweight footprint (~5MB).
+
+### Privacy & Setup
+- **First-Run Setup** — Guided permission requests for notifications and location on first launch.
+- **Opt-Out Analytics** — Anonymous usage analytics (PostHog EU) with easy toggle in settings.
+- **Error Tracking** — Automatic crash reporting to help improve app stability.
 
 ## 🚀 Installation
 
