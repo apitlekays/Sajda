@@ -61,6 +61,24 @@ jobs:
           security set-keychain-settings -t 3600 -u build.keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
+      - name: Debug signing key presence
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "✅ TAURI_SIGNING_PRIVATE_KEY is set (length: ${#TAURI_SIGNING_PRIVATE_KEY} chars)"
+            echo "First 20 chars: ${TAURI_SIGNING_PRIVATE_KEY:0:20}..."
+          else
+            echo "❌ TAURI_SIGNING_PRIVATE_KEY is NOT set or empty!"
+          fi
+
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+            echo "✅ TAURI_SIGNING_PRIVATE_KEY_PASSWORD is set (length: ${#TAURI_SIGNING_PRIVATE_KEY_PASSWORD} chars)"
+          else
+            echo "⚠️ TAURI_SIGNING_PRIVATE_KEY_PASSWORD is NOT set (may be intentional if key has no password)"
+          fi
+
       - name: Build and Release
         id: tauri
         uses: tauri-apps/tauri-action@v0
@@ -78,7 +96,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} --verbose
 
       - name: Find and upload signature file
         env:
