@@ -1,6 +1,6 @@
 [package]
 name = "sajda"
-version = "0.0.12"
+version = "0.0.13"
 description = "Modern Islamic Prayer Times & Reminder App for macOS"
 authors = ["Hafiz Hanif"]
 edition = "2021"

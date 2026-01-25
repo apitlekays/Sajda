@@ -216,28 +216,52 @@ https://github.com/apitlekays/Sajda/releases/latest/download/latest.json
 
 ## Release Workflow
 
-Releases are **fully automated** via GitHub Actions. When a version tag is pushed, the workflow builds, signs, and publishes the release with all required updater files.
+Releases are built automatically via GitHub Actions, but require **manual publishing** as the final step.
 
-### Release Steps (IMPORTANT - Follow Exactly)
+### Complete Release Process (Step-by-Step)
 
-1. **Bump version** in all 3 files:
-   - `package.json` — `"version": "X.Y.Z"`
-   - `src-tauri/tauri.conf.json` — `"version": "X.Y.Z"`
-   - `src-tauri/Cargo.toml` — `version = "X.Y.Z"`
+#### Step 1: Bump Version
+Update version in **all 3 files** (must match exactly):
+- `package.json` — `"version": "X.Y.Z"`
+- `src-tauri/tauri.conf.json` — `"version": "X.Y.Z"`
+- `src-tauri/Cargo.toml` — `version = "X.Y.Z"`
 
-2. **Commit and push**:
-   ```bash
-   git add -A && git commit -m "feat: <description> (vX.Y.Z)"
-   git push origin main
-   ```
+#### Step 2: Commit and Push
+```bash
+git add -A && git commit -m "feat: <description> (vX.Y.Z)"
+git push origin main
+```
 
-3. **Create and push tag** (triggers release workflow):
-   ```bash
-   git tag vX.Y.Z
-   git push origin vX.Y.Z
-   ```
+#### Step 3: Create and Push Tag
+This triggers the GitHub Actions workflow:
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
 
-4. **Monitor workflow**: Check GitHub Actions for the release run
+#### Step 4: Monitor Workflow
+- Go to [GitHub Actions](https://github.com/apitlekays/Sajda/actions)
+- Watch the "Release" workflow run
+- Wait for all jobs to complete (typically 10-15 minutes):
+  - `release (aarch64)` — Apple Silicon build
+  - `release (x64)` — Intel build
+  - `publish-updater` — Generates `latest.json`
+
+#### Step 5: Publish the Release (MANUAL - REQUIRED!)
+**IMPORTANT:** The workflow creates a **DRAFT** release. Auto-updates will NOT work until you publish it!
+
+1. Go to [GitHub Releases](https://github.com/apitlekays/Sajda/releases)
+2. Find the draft release (labeled "Draft" with version vX.Y.Z)
+3. Verify all 7 assets are present (see list below)
+4. Click **"Edit"** (pencil icon)
+5. Click **"Publish release"** (green button at bottom)
+
+#### Step 6: Verify Auto-Update Endpoint
+After publishing, verify the update endpoint works:
+```bash
+curl -sL https://github.com/apitlekays/Sajda/releases/latest/download/latest.json
+```
+Should return JSON with version, non-empty signatures, and download URLs.
 
 ### What GitHub Actions Does Automatically
 
@@ -245,29 +269,36 @@ The `.github/workflows/release.yml` workflow:
 1. Builds for both architectures (aarch64 + x86_64)
 2. Code-signs with Developer ID certificate
 3. Notarizes with Apple
-4. Uploads DMG and `.app.tar.gz` files
-5. **Uploads signature files** (`.sig`) for each architecture
-6. **Generates and uploads `latest.json`** (required for auto-updates)
+4. Uploads DMG and `.app.tar.gz` files to **draft** release
+5. Signs the `.tar.gz` files using `tauri signer sign` CLI
+6. Uploads signature files (`.sig`) for each architecture
+7. Generates and uploads `latest.json` with signatures
 
-### Release Assets (Auto-Generated)
+### Release Assets (All 7 Required)
 
-After workflow completes, the release should contain:
-- `Sajda_X.Y.Z_aarch64.dmg` — Apple Silicon installer
-- `Sajda_X.Y.Z_x64.dmg` — Intel installer
-- `Sajda_aarch64.app.tar.gz` — Apple Silicon update bundle
-- `Sajda_x64.app.tar.gz` — Intel update bundle
-- `Sajda_aarch64.app.tar.gz.sig` — Apple Silicon signature
-- `Sajda_x64.app.tar.gz.sig` — Intel signature
-- `latest.json` — Update manifest (required for auto-updates to work)
+After workflow completes, the draft release should contain:
+| Asset | Description |
+|-------|-------------|
+| `Sajda_X.Y.Z_aarch64.dmg` | Apple Silicon installer |
+| `Sajda_X.Y.Z_x64.dmg` | Intel installer |
+| `Sajda_aarch64.app.tar.gz` | Apple Silicon update bundle |
+| `Sajda_x64.app.tar.gz` | Intel update bundle |
+| `Sajda_aarch64.app.tar.gz.sig` | Apple Silicon signature |
+| `Sajda_x64.app.tar.gz.sig` | Intel signature |
+| `latest.json` | Update manifest (required for auto-updates) |
 
-### Verifying Release
+**If any asset is missing, the workflow failed and needs investigation.**
 
-After workflow completes, verify the update endpoint works:
-```bash
-curl -sL https://github.com/apitlekays/Sajda/releases/latest/download/latest.json
-```
+### Troubleshooting
 
-Should return JSON with version, signatures, and download URLs.
+**Workflow failed?**
+- Check the failed step in GitHub Actions logs
+- Common issues: signing key problems, notarization failures, network timeouts
+
+**Auto-update not working after publish?**
+- Verify `latest.json` exists and has non-empty `signature` fields
+- Check that the release is published (not draft)
+- The updater endpoint points to `/releases/latest/download/latest.json`
 
 ### Source Maps (PostHog)
 
