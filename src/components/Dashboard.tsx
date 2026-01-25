@@ -30,7 +30,9 @@ export const Dashboard = () => {
     const {
         updateAvailable,
         isDownloading,
+        isInstalling,
         downloadProgress,
+        error: updateError,
         checkForUpdates,
         downloadAndInstall,
         dismissUpdate
@@ -252,6 +254,53 @@ export const Dashboard = () => {
 
                 <div className="flex-1 overflow-y-auto space-y-4 px-3 py-3 rounded-lg bg-muted/30 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
 
+                    {/* Update Available Section */}
+                    {updateAvailable && (
+                        <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                                <Download className="w-4 h-4 text-primary" />
+                                <div>
+                                    <p className="text-sm font-medium">Update Available</p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        v{updateAvailable.version} is ready to install
+                                    </p>
+                                </div>
+                            </div>
+                            {updateError && (
+                                <p className="text-[10px] text-destructive">{updateError}</p>
+                            )}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={dismissUpdate}
+                                    className="flex-1 px-3 py-2 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
+                                >
+                                    Later
+                                </button>
+                                <button
+                                    onClick={downloadAndInstall}
+                                    disabled={isDownloading || isInstalling}
+                                    className="flex-1 px-3 py-2 bg-primary text-primary-foreground text-xs rounded-md hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors"
+                                >
+                                    {isInstalling ? (
+                                        <>
+                                            <RefreshCw className="w-3 h-3 animate-spin" />
+                                            Restarting...
+                                        </>
+                                    ) : isDownloading ? (
+                                        <>
+                                            <RefreshCw className="w-3 h-3 animate-spin" />
+                                            {Math.round(downloadProgress)}%
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Download className="w-3 h-3" />
+                                            Update Now
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col">
@@ -586,9 +635,13 @@ export const Dashboard = () => {
             <div className="absolute top-3 left-3 z-20">
                 <button
                     onClick={() => setIsSettingsOpen(true)}
-                    className="p-2 text-muted-foreground hover:text-primary transition-colors bg-background/20 rounded-full hover:bg-background/40 backdrop-blur-md"
+                    className="relative p-2 text-muted-foreground hover:text-primary transition-colors bg-background/20 rounded-full hover:bg-background/40 backdrop-blur-md"
                 >
                     <Settings className="w-5 h-5" />
+                    {/* Red badge for update available */}
+                    {updateAvailable && (
+                        <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+                    )}
                 </button>
             </div>
 
@@ -804,44 +857,6 @@ export const Dashboard = () => {
                     </div>
                 )
             }
-            {/* Update Available Banner */}
-            {updateAvailable && (
-                <div className="absolute bottom-16 left-4 right-4 bg-primary/10 border border-primary/20 rounded-lg p-3 z-40">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Download className="w-4 h-4 text-primary" />
-                            <div>
-                                <p className="text-sm font-medium">Update Available</p>
-                                <p className="text-[10px] text-muted-foreground">
-                                    v{updateAvailable.version} ready to install
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={dismissUpdate}
-                                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                                Later
-                            </button>
-                            <button
-                                onClick={downloadAndInstall}
-                                disabled={isDownloading}
-                                className="px-3 py-1.5 bg-primary text-primary-foreground text-xs rounded-md hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1 transition-colors"
-                            >
-                                {isDownloading ? (
-                                    <>
-                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                        {Math.round(downloadProgress)}%
-                                    </>
-                                ) : (
-                                    'Update Now'
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Footer / Location & Version */}
             <div className="mt-auto py-2 flex flex-col items-center gap-0.5 px-2">
@@ -877,8 +892,11 @@ export const Dashboard = () => {
                     )}
                     </div>
                 </div>
-                <div className="text-[9px] text-muted-foreground/40 font-mono">
-                    v{__APP_VERSION__}
+                <div className="flex items-center gap-1.5 text-[9px] font-mono">
+                    <span className="text-muted-foreground/40">v{__APP_VERSION__}</span>
+                    {updateAvailable && (
+                        <span className="text-primary/70 animate-pulse">• Update available</span>
+                    )}
                 </div>
             </div>
         </div >

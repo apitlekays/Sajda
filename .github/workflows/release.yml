@@ -62,6 +62,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
       - name: Build and Release
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -76,25 +77,8 @@ jobs:
           releaseBody: 'See release notes for details.'
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: false
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
-
-      - name: Upload signature file to release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          SIG_FILE="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Sajda.app.tar.gz.sig"
-
-          if [ -f "$SIG_FILE" ]; then
-            echo "Found signature file: $SIG_FILE"
-            cp "$SIG_FILE" "Sajda_${{ matrix.arch }}.app.tar.gz.sig"
-            gh release upload "v${VERSION}" "Sajda_${{ matrix.arch }}.app.tar.gz.sig" --clobber
-            echo "Uploaded signature for ${{ matrix.arch }}"
-          else
-            echo "Signature file not found: $SIG_FILE"
-            ls -la src-tauri/target/${{ matrix.target }}/release/bundle/macos/ || true
-          fi
 
   publish-updater:
     needs: release
