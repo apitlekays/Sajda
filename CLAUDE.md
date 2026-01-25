@@ -86,6 +86,7 @@ public/                 # Static assets, fonts, icons
 
 - Info button (bottom-right) shows quit menu; dismisses on click-outside or window blur
 - `quit_app` Tauri command exits the app cleanly via `app.exit(0)`
+- Version display in footer uses `__APP_VERSION__` global constant (injected by Vite from package.json)
 
 ## Coding Conventions
 
@@ -198,10 +199,12 @@ Each build produces unique minified code with different chunk hashes. Without up
 **Format:** Semantic Versioning + commit ID: `vX.Y.Z (abcdef)`
 
 ### Version Locations
-Version must be synchronized across:
-- `package.json` — `"version": "X.Y.Z"`
-- `src-tauri/tauri.conf.json` — `"version": "X.Y.Z"`
-- `src-tauri/Cargo.toml` — `version = "X.Y.Z"`
+Version must be synchronized across these 3 files:
+- `package.json` — `"version": "X.Y.Z"` (source of truth for frontend)
+- `src-tauri/tauri.conf.json` — `"version": "X.Y.Z"` (Tauri app version)
+- `src-tauri/Cargo.toml` — `version = "X.Y.Z"` (Rust crate version)
+
+**Note:** Frontend components use `__APP_VERSION__` global constant injected by Vite from package.json at build time. No need to update UI code when bumping versions.
 
 ### Version Bump Rules
 - **Patch (0.0.X):** Auto-bump on every README/CLAUDE.md update + git commit/push

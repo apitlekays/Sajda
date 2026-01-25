@@ -53,6 +53,7 @@
 - **Prayer Habit Tracker** — Daily checkbox tracker that resets at midnight.
 - **Current Prayer Highlight** — Green highlight on the active prayer period.
 - **Rich Dashboard** — Beautiful, glassmorphic UI with smooth animations.
+- **Version Display** — App version shown in footer, auto-synced from package.json.
 - **Native Performance** — Built on Tauri v2 for an ultra-lightweight footprint (~5MB).
 
 ### Privacy & Setup

@@ -776,14 +776,15 @@ export const Dashboard = () => {
                     </div>
                 )
             }
-            {/* Footer / Location */}
-            <div className="mt-auto py-2 flex items-center justify-between px-2">
-                <div className="flex-1" />
-                <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity">
-                    <Navigation className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate max-w-[200px]">{todayTimes?.zone_name || ZONE_MAPPING[zone] || zone}</span>
-                </div>
-                <div className="flex-1 flex justify-end relative">
+            {/* Footer / Location & Version */}
+            <div className="mt-auto py-2 flex flex-col items-center gap-0.5 px-2">
+                <div className="w-full flex items-center justify-between">
+                    <div className="flex-1" />
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity">
+                        <Navigation className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate max-w-[200px]">{todayTimes?.zone_name || ZONE_MAPPING[zone] || zone}</span>
+                    </div>
+                    <div className="flex-1 flex justify-end relative">
                     <button
                         onClick={() => setIsInfoOpen(!isInfoOpen)}
                         className="p-1 text-muted-foreground/40 hover:text-muted-foreground transition-colors rounded-full"
@@ -807,6 +808,10 @@ export const Dashboard = () => {
                             </div>
                         </>
                     )}
+                    </div>
+                </div>
+                <div className="text-[9px] text-muted-foreground/40 font-mono">
+                    v{__APP_VERSION__}
                 </div>
             </div>
         </div >
