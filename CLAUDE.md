@@ -216,40 +216,68 @@ https://github.com/apitlekays/Sajda/releases/latest/download/latest.json
 
 ## Release Workflow
 
-**IMPORTANT:** Every release requires source map upload for readable error stack traces in PostHog.
+Releases are **fully automated** via GitHub Actions. When a version tag is pushed, the workflow builds, signs, and publishes the release with all required updater files.
 
-### First-Time Setup
+### Release Steps (IMPORTANT - Follow Exactly)
+
+1. **Bump version** in all 3 files:
+   - `package.json` — `"version": "X.Y.Z"`
+   - `src-tauri/tauri.conf.json` — `"version": "X.Y.Z"`
+   - `src-tauri/Cargo.toml` — `version = "X.Y.Z"`
+
+2. **Commit and push**:
+   ```bash
+   git add -A && git commit -m "feat: <description> (vX.Y.Z)"
+   git push origin main
+   ```
+
+3. **Create and push tag** (triggers release workflow):
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+4. **Monitor workflow**: Check GitHub Actions for the release run
+
+### What GitHub Actions Does Automatically
+
+The `.github/workflows/release.yml` workflow:
+1. Builds for both architectures (aarch64 + x86_64)
+2. Code-signs with Developer ID certificate
+3. Notarizes with Apple
+4. Uploads DMG and `.app.tar.gz` files
+5. **Uploads signature files** (`.sig`) for each architecture
+6. **Generates and uploads `latest.json`** (required for auto-updates)
+
+### Release Assets (Auto-Generated)
+
+After workflow completes, the release should contain:
+- `Sajda_X.Y.Z_aarch64.dmg` — Apple Silicon installer
+- `Sajda_X.Y.Z_x64.dmg` — Intel installer
+- `Sajda_aarch64.app.tar.gz` — Apple Silicon update bundle
+- `Sajda_x64.app.tar.gz` — Intel update bundle
+- `Sajda_aarch64.app.tar.gz.sig` — Apple Silicon signature
+- `Sajda_x64.app.tar.gz.sig` — Intel signature
+- `latest.json` — Update manifest (required for auto-updates to work)
+
+### Verifying Release
+
+After workflow completes, verify the update endpoint works:
 ```bash
-# Authenticate with PostHog CLI (EU region)
-npx posthog-cli login --host https://eu.posthog.com
+curl -sL https://github.com/apitlekays/Sajda/releases/latest/download/latest.json
 ```
 
-For CI/CD, set environment variables instead:
-- `POSTHOG_CLI_HOST` = `https://eu.posthog.com`
-- `POSTHOG_CLI_ENV_ID` = PostHog project ID
-- `POSTHOG_CLI_TOKEN` = Personal API key with error tracking write permissions
+Should return JSON with version, signatures, and download URLs.
 
-### Release Steps
+### Source Maps (PostHog)
+
+For readable error stack traces in PostHog, upload source maps after building:
 ```bash
-# 1. Bump version in package.json
-
-# 2. Build frontend (generates source maps)
 npm run build
-
-# 3. Inject metadata + upload source maps to PostHog
 npm run sourcemap:release
-
-# 4. Build Tauri app (uses the injected dist/)
-npm run tauri build
 ```
 
-### Source Map Scripts
-- `npm run sourcemap:inject` — Inject metadata into built files (uses package.json version)
-- `npm run sourcemap:upload` — Upload source maps to PostHog EU
-- `npm run sourcemap:release` — Both inject + upload
-
-### Why Source Maps Matter
-Each build produces unique minified code with different chunk hashes. Without uploading source maps for each release, PostHog will show minified stack traces like `index-abc123.js:1:2345` instead of readable locations like `Dashboard.tsx:142`.
+**Note:** This is optional but recommended for debugging production errors.
 
 ## Versioning
 
