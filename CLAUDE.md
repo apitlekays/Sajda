@@ -8,7 +8,7 @@ Sajda is a macOS menu bar application for Islamic prayer times and reminders. Bu
 
 - **Frontend:** React 19, TypeScript 5.8, Vite 7, Tailwind CSS 3, Zustand (state), Framer Motion
 - **Backend:** Rust, Tauri v2, Tokio, Rodio (audio), Salah (prayer calculations), Swift (Core Location via swift-rs)
-- **Platform:** macOS (menu bar app, 320x600px window, always-on-top)
+- **Platform:** macOS 10.15+ Catalina (menu bar app, 320x600px window, always-on-top)
 
 ## Commands
 
@@ -87,6 +87,9 @@ Native GPS location is implemented via Swift FFI using the `swift-rs` crate. Thi
 - `request_native_location_auth` — Request authorization (shows system dialog)
 - `is_native_location_available` — Check if macOS 10.15+ (native location supported)
 - `get_macos_version_cmd` — Get macOS version string
+
+**Swift Runtime Compatibility:**
+The app uses Swift FFI via `swift-rs` which links against Swift runtime libraries. To ensure compatibility with older macOS versions (10.15+), the CI workflow sets `MACOSX_DEPLOYMENT_TARGET=10.15`. This forces the linker to use absolute paths (`/usr/lib/swift/libswiftCore.dylib`) instead of `@rpath` references, which prevents "Library not loaded: @rpath/libswiftCore.dylib" crashes on older macOS versions.
 
 ### Reminder System Flow
 

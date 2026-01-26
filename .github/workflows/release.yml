@@ -71,6 +71,9 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Fix Swift runtime linking for older macOS versions (10.15+)
+          # Without this, the binary uses @rpath/libswiftCore.dylib which fails on macOS 12
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
         with:
           tagName: v__VERSION__
           releaseName: 'Sajda v__VERSION__'
