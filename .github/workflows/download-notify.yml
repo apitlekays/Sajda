@@ -9,26 +9,20 @@ on:
 jobs:
   check-downloads:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Get current download counts
         id: current
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get download counts for all published releases
-          COUNTS=$(gh api repos/${{ github.repository }}/releases --jq '
-            [.[] | select(.draft == false) | .assets[] | select(.name | endswith(".dmg")) | {name: .name, count: .download_count}] |
-            sort_by(.name) |
-            map("\(.name):\(.count)") |
-            join(",")
-          ')
-          echo "counts=$COUNTS" >> $GITHUB_OUTPUT
-
           # Calculate total DMG downloads
           TOTAL=$(gh api repos/${{ github.repository }}/releases --jq '
             [.[] | select(.draft == false) | .assets[] | select(.name | endswith(".dmg")) | .download_count] | add // 0
           ')
           echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "Current total: $TOTAL"
 
       - name: Get previous counts from cache
         id: cache
@@ -45,8 +39,10 @@ jobs:
           if [ -f download-counts.txt ]; then
             PREV=$(cat download-counts.txt)
             echo "total=$PREV" >> $GITHUB_OUTPUT
+            echo "Previous total: $PREV"
           else
             echo "total=0" >> $GITHUB_OUTPUT
+            echo "No previous count found, starting fresh"
           fi
 
       - name: Check for new downloads and notify
@@ -54,8 +50,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          CURRENT=${{ steps.current.outputs.total }}
-          PREVIOUS=${{ steps.previous.outputs.total }}
+          CURRENT="${{ steps.current.outputs.total }}"
+          PREVIOUS="${{ steps.previous.outputs.total }}"
 
           echo "Previous total: $PREVIOUS"
           echo "Current total: $CURRENT"
@@ -66,22 +62,23 @@ jobs:
             # Get latest version info
             LATEST_VERSION=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name')
 
-            # Build message
-            MESSAGE="📥 *Sajda Download Alert*
+            # Build message with newlines encoded
+            MESSAGE=$(cat <<EOF
+          📥 Sajda Download Alert
 
-+${DIFF} new download(s)!
+          +${DIFF} new download(s)!
 
-📊 *Total Downloads:* ${CURRENT}
-🏷️ *Latest Version:* ${LATEST_VERSION}
+          📊 Total Downloads: ${CURRENT}
+          🏷️ Latest Version: ${LATEST_VERSION}
 
-[View Releases](https://github.com/${{ github.repository }}/releases)"
+          https://github.com/${{ github.repository }}/releases
+          EOF
+          )
 
             # Send Telegram notification
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               -d "chat_id=${TELEGRAM_CHAT_ID}" \
-              -d "text=${MESSAGE}" \
-              -d "parse_mode=Markdown" \
-              -d "disable_web_page_preview=true"
+              --data-urlencode "text=${MESSAGE}"
 
             echo "Notification sent: +$DIFF downloads"
           else
