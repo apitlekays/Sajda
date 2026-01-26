@@ -26,12 +26,10 @@ jobs:
 
       - name: Get previous counts from cache
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: download-counts.txt
-          key: download-counts-${{ github.run_id }}
-          restore-keys: |
-            download-counts-
+          key: sajda-download-counts
 
       - name: Read previous counts
         id: previous
@@ -39,7 +37,7 @@ jobs:
           if [ -f download-counts.txt ]; then
             PREV=$(cat download-counts.txt)
             echo "total=$PREV" >> $GITHUB_OUTPUT
-            echo "Previous total: $PREV"
+            echo "Previous total from cache: $PREV"
           else
             echo "total=0" >> $GITHUB_OUTPUT
             echo "No previous count found, starting fresh"
@@ -52,45 +50,30 @@ jobs:
         run: |
           CURRENT="${{ steps.current.outputs.total }}"
           PREVIOUS="${{ steps.previous.outputs.total }}"
-
           echo "Previous total: $PREVIOUS"
           echo "Current total: $CURRENT"
-
           if [ "$CURRENT" -gt "$PREVIOUS" ]; then
             DIFF=$((CURRENT - PREVIOUS))
-
-            # Get latest version info
             LATEST_VERSION=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name')
-
-            # Build message with newlines encoded
-            MESSAGE=$(cat <<EOF
-          📥 Sajda Download Alert
-
-          +${DIFF} new download(s)!
-
-          📊 Total Downloads: ${CURRENT}
-          🏷️ Latest Version: ${LATEST_VERSION}
-
-          https://github.com/${{ github.repository }}/releases
-          EOF
-          )
-
-            # Send Telegram notification
-            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              -d "chat_id=${TELEGRAM_CHAT_ID}" \
-              --data-urlencode "text=${MESSAGE}"
-
+            MESSAGE="📥 Sajda Download Alert%0A%0A+${DIFF} new download(s)!%0A%0A📊 Total Downloads: ${CURRENT}%0A🏷️ Latest Version: ${LATEST_VERSION}%0A%0Ahttps://github.com/${{ github.repository }}/releases"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" -d "chat_id=${TELEGRAM_CHAT_ID}" -d "text=${MESSAGE}"
             echo "Notification sent: +$DIFF downloads"
           else
-            echo "No new downloads detected"
+            echo "No new downloads detected (current=$CURRENT, previous=$PREVIOUS)"
           fi
 
       - name: Save current counts
         run: |
           echo "${{ steps.current.outputs.total }}" > download-counts.txt
+          cat download-counts.txt
 
-      - name: Update cache
+      - name: Delete old cache
+        continue-on-error: true
+        run: |
+          gh cache delete sajda-download-counts --repo ${{ github.repository }} || true
+
+      - name: Save new cache
         uses: actions/cache/save@v4
         with:
           path: download-counts.txt
-          key: download-counts-${{ github.run_id }}
+          key: sajda-download-counts
