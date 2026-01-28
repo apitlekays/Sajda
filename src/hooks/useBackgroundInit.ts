@@ -32,7 +32,7 @@ export function useBackgroundInit() {
                 .catch(e => console.warn("Analytics init failed:", e));
 
             // Fire-and-forget: Autostart status check
-            checkAutostartStatus().catch(e => console.warn("Autostart check failed:", e));
+            checkAutostartStatus().catch((e: unknown) => console.warn("Autostart check failed:", e));
 
             // Fire-and-forget: Location authorization sync
             syncLocationAuth(setupComplete, locationEnabled, setLocationEnabled).catch(e => {

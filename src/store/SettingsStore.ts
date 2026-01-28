@@ -57,6 +57,12 @@ interface SettingsState {
     // First-run setup
     setupComplete: boolean;
     completeSetup: () => Promise<void>;
+
+    // Autostart
+    autostartEnabled: boolean;
+    autostartLoading: boolean;
+    checkAutostartStatus: () => Promise<void>;
+    toggleAutostart: () => Promise<void>;
 }
 
 const NEXT_MODE: Record<AudioMode, AudioMode> = {
@@ -74,6 +80,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     ramadhanCountdown: true,
     telemetryEnabled: true, // Opt-out: enabled by default
     setupComplete: false, // First-run detection
+
+    // Autostart
+    autostartEnabled: false, // Will be synced with actual system state
+    autostartLoading: false,
 
     adhanSelection: 'Nasser',
     calculationMethod: 'JAKIM',
@@ -415,6 +425,45 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             console.error("Failed to toggle location:", e);
             trackError('location_toggle', e instanceof Error ? e.message : 'Failed to toggle location');
             return { success: false, status: 'unknown' };
+        }
+    },
+
+    // Autostart
+    checkAutostartStatus: async () => {
+        try {
+            const { isEnabled } = await import('@tauri-apps/plugin-autostart');
+            const enabled = await isEnabled();
+            set({ autostartEnabled: enabled, autostartLoading: false });
+        } catch (e) {
+            console.error("Failed to check autostart:", e);
+            set({ autostartLoading: false });
+        }
+    },
+
+    toggleAutostart: async () => {
+        const { autostartEnabled } = get();
+        set({ autostartLoading: true });
+
+        try {
+            const { enable, disable, isEnabled } = await import('@tauri-apps/plugin-autostart');
+
+            if (autostartEnabled) {
+                await disable();
+            } else {
+                await enable();
+            }
+
+            const actualEnabled = await isEnabled();
+            set({ autostartEnabled: actualEnabled, autostartLoading: false });
+        } catch (e) {
+            console.error("Failed to toggle autostart:", e);
+            // Refresh actual state on error
+            try {
+                const { isEnabled } = await import('@tauri-apps/plugin-autostart');
+                set({ autostartEnabled: await isEnabled(), autostartLoading: false });
+            } catch {
+                set({ autostartLoading: false });
+            }
         }
     }
 }));
