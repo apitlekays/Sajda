@@ -23,10 +23,13 @@ public class LocationResult: NSObject {
 /// CLLocationManager delegate handler
 class LocationDelegate: NSObject, CLLocationManagerDelegate {
     private let semaphore: DispatchSemaphore
+    private let authSemaphore: DispatchSemaphore?
     var result: LocationResult?
+    var authorizationChanged = false
 
-    init(semaphore: DispatchSemaphore) {
+    init(semaphore: DispatchSemaphore, authSemaphore: DispatchSemaphore? = nil) {
         self.semaphore = semaphore
+        self.authSemaphore = authSemaphore
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -81,7 +84,10 @@ class LocationDelegate: NSObject, CLLocationManagerDelegate {
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        // Handle authorization changes if needed
+        print("Swift: Authorization changed to: \(getAuthorizationStatus(manager).rawValue)")
+        authorizationChanged = true
+        // Signal the auth semaphore if we're waiting for authorization
+        authSemaphore?.signal()
     }
 }
 
@@ -179,7 +185,8 @@ public func getCurrentLocation() -> LocationResult {
     }
 
     let semaphore = DispatchSemaphore(value: 0)
-    let delegate = LocationDelegate(semaphore: semaphore)
+    let authSemaphore = DispatchSemaphore(value: 0)
+    let delegate = LocationDelegate(semaphore: semaphore, authSemaphore: authSemaphore)
     var manager: CLLocationManager!
 
     // Must create CLLocationManager on main thread
@@ -202,51 +209,64 @@ public func getCurrentLocation() -> LocationResult {
             errorMessage: "Location access denied or restricted"
         )
     case .notDetermined:
-        // Request authorization AND try to start location updates
-        // On macOS, starting updates may trigger the authorization dialog
-        print("Swift: Authorization not determined, requesting authorization and starting updates...")
+        // Request authorization ONLY - don't start updates until authorized
+        print("Swift: Authorization not determined, requesting authorization...")
         runOnMain {
             manager.requestAlwaysAuthorization()
-            // Also try starting updates - this often triggers the dialog on macOS
-            manager.startUpdatingLocation()
         }
 
-        // Wait for user to respond to dialog (3 seconds)
+        // Wait for authorization callback (up to 10 seconds)
         print("Swift: Waiting for user to respond to authorization dialog...")
-        Thread.sleep(forTimeInterval: 3.0)
+        let authTimeout = DispatchTime.now() + .seconds(10)
+        let authWaitResult = authSemaphore.wait(timeout: authTimeout)
 
-        // Check again after waiting
+        if authWaitResult == .timedOut {
+            print("Swift: Authorization dialog timed out - user hasn't responded yet")
+            return LocationResult(
+                latitude: 0, longitude: 0, accuracy: 0,
+                errorCode: 5,
+                errorMessage: "Authorization pending - user hasn't responded to dialog"
+            )
+        }
+
+        // Check the new status after user responded
         let newStatus = getAuthorizationStatus(manager)
-        print("Swift: Auth status after waiting: \(newStatus.rawValue)")
+        print("Swift: Auth status after user response: \(newStatus.rawValue)")
 
-        if newStatus == .denied || newStatus == .restricted {
+        if newStatus == .authorizedAlways {
+            print("Swift: Authorization granted, now starting location updates...")
             runOnMain {
-                manager.stopUpdatingLocation()
+                manager.startUpdatingLocation()
             }
+        } else if newStatus == .denied || newStatus == .restricted {
+            print("Swift: User denied location access")
             return LocationResult(
                 latitude: 0, longitude: 0, accuracy: 0,
                 errorCode: 1,
-                errorMessage: "Location authorization denied"
+                errorMessage: "Location authorization denied by user"
             )
-        } else if newStatus == .notDetermined {
-            // Still not determined - dialog may not have appeared or user hasn't responded
-            // Continue to wait for location updates which are already started
-            print("Swift: Still not determined, waiting for location updates...")
+        } else {
+            // Still not determined somehow
+            print("Swift: Authorization still not determined after callback")
+            return LocationResult(
+                latitude: 0, longitude: 0, accuracy: 0,
+                errorCode: 5,
+                errorMessage: "Authorization not determined"
+            )
         }
-        // If authorized, continue to wait for updates (already started above)
     case .authorizedAlways:
         print("Swift: Already authorized, starting location updates...")
         runOnMain {
             manager.startUpdatingLocation()
         }
     @unknown default:
-        print("Swift: Unknown auth status, trying anyway...")
+        print("Swift: Unknown auth status (\(authStatus.rawValue)), trying anyway...")
         runOnMain {
             manager.startUpdatingLocation()
         }
     }
 
-    // Wait for result with 10 second timeout
+    // Wait for location result with 10 second timeout
     print("Swift: Waiting for location result...")
     let timeout = DispatchTime.now() + .seconds(10)
     let waitResult = semaphore.wait(timeout: timeout)

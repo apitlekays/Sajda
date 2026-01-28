@@ -2,7 +2,7 @@ use crate::prayer_engine::PrayerEngine; // Import the struct
 use crate::settings;
 use chrono::{Datelike, NaiveDate, Timelike};
 use std::collections::HashSet;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 use tokio::time::interval;
@@ -65,12 +65,49 @@ pub fn start_ticker(app: AppHandle) {
         let mut triggered_today: HashSet<String> = HashSet::new();
         let mut last_date: Option<NaiveDate> = None;
 
+        // Track last tick time to detect sleep/wake cycles
+        let mut last_tick_time: Option<Instant> = None;
+        const WAKE_THRESHOLD_SECS: u64 = 5;
+
         loop {
             interval.tick().await;
+
+            // Detect wake from sleep via time jump
+            let now_instant = Instant::now();
+            let detected_wake = if let Some(last_tick) = last_tick_time {
+                last_tick.elapsed().as_secs() > WAKE_THRESHOLD_SECS
+            } else {
+                false
+            };
+            last_tick_time = Some(now_instant);
 
             // Access State
             let engine = app.state::<PrayerEngine>();
             let now = chrono::Local::now();
+
+            // On wake: mark past prayers as triggered to prevent stale adhan
+            if detected_wake {
+                println!("Rust: Wake from sleep detected");
+                if let Some(schedule) = engine.get_today_schedule() {
+                    let current_timestamp = now.timestamp();
+                    for (name, time) in [
+                        ("fajr", schedule.fajr),
+                        ("syuruk", schedule.syuruk),
+                        ("dhuhr", schedule.dhuhr),
+                        ("asr", schedule.asr),
+                        ("maghrib", schedule.maghrib),
+                        ("isha", schedule.isha),
+                    ] {
+                        if current_timestamp > time && !triggered_today.contains(name) {
+                            triggered_today.insert(name.to_string());
+                            println!("Rust: [Wake] Marked past prayer: {}", name);
+                        }
+                    }
+                }
+
+                // Emit wake event to frontend for update checks
+                let _ = app.emit("system-wake", ());
+            }
 
             // Reset triggered set at midnight
             let current_date = now.date_naive();

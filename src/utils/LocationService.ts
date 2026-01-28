@@ -101,21 +101,38 @@ export const LocationService = {
 
     /**
      * Get location via IP-based geolocation (fallback)
+     * Includes retry logic with exponential backoff
      */
     async getIPLocation(): Promise<{ lat: number; lng: number; source: string }> {
-        try {
-            const response = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
-            if (response.data?.latitude && response.data?.longitude) {
-                console.log(`IP location: ${response.data.latitude}, ${response.data.longitude}`);
-                return {
-                    lat: response.data.latitude,
-                    lng: response.data.longitude,
-                    source: "ip"
-                };
+        const MAX_RETRIES = 3;
+        const INITIAL_DELAY_MS = 1000;
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                console.log(`[LocationService] IP geolocation attempt ${attempt}/${MAX_RETRIES}...`);
+                const response = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
+                if (response.data?.latitude && response.data?.longitude) {
+                    console.log(`IP location: ${response.data.latitude}, ${response.data.longitude}`);
+                    return {
+                        lat: response.data.latitude,
+                        lng: response.data.longitude,
+                        source: "ip"
+                    };
+                }
+                console.warn(`[LocationService] IP response missing coordinates (attempt ${attempt})`);
+            } catch (e) {
+                console.error(`[LocationService] IP geolocation failed (attempt ${attempt}):`, e);
+
+                if (attempt < MAX_RETRIES) {
+                    // Exponential backoff: 1s, 2s, 4s
+                    const delay = INITIAL_DELAY_MS * Math.pow(2, attempt - 1);
+                    console.log(`[LocationService] Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
-        } catch (e) {
-            console.error("IP geolocation failed:", e);
         }
+
+        console.error("[LocationService] IP geolocation failed after all retries");
         return { lat: 0, lng: 0, source: "unavailable" };
     },
 
