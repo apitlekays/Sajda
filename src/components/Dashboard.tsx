@@ -8,7 +8,8 @@ import { useTrackerStore } from "../store/TrackerStore";
 import { useSettingsStore, AudioMode } from "../store/SettingsStore";
 import { useReminderStore } from "../store/ReminderStore";
 import { useUpdateStore } from "../store/UpdateStore";
-import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart, Info, LogOut, Moon, BarChart2, Download, RefreshCw } from "lucide-react";
+import { DashboardSkeleton } from "./DashboardSkeleton";
+import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart, Info, LogOut, Moon, BarChart2, Download, RefreshCw, Power } from "lucide-react";
 import { ZONE_MAPPING } from "../utils/ZoneData";
 import { getIslamicKeyDateMessages } from "../utils/HijriDate";
 import { playToggleSound, playCheckSound } from "../utils/UISounds";
@@ -24,7 +25,7 @@ import {
 } from "../utils/Analytics";
 
 export const Dashboard = () => {
-    const { todayTimes, nextPrayer, fetchTimes, updateCountdown, loading, zone } = usePrayerStore();
+    const { todayTimes, nextPrayer, fetchTimes, updateCountdown, zone } = usePrayerStore();
     const { isChecked, togglePrayer } = useTrackerStore();
     const { activeReminder, isModalOpen, closeModal, openModal, triggerNewReminder } = useReminderStore();
     const {
@@ -46,7 +47,8 @@ export const Dashboard = () => {
         adhanSelection, setAdhanSelection,
         calculationMethod, setCalculationMethod,
         telemetryEnabled, toggleTelemetry,
-        locationEnabled, toggleLocation, locationPermissionStatus, checkLocationPermission
+        locationEnabled, toggleLocation, locationPermissionStatus, checkLocationPermission,
+        autostartEnabled, autostartLoading, toggleAutostart, checkAutostartStatus
     } = useSettingsStore();
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -72,12 +74,13 @@ export const Dashboard = () => {
         return () => window.removeEventListener('blur', handleBlur);
     }, []);
 
-    // Check location permission status when settings opens
+    // Check location permission and autostart status when settings opens
     useEffect(() => {
         if (isSettingsOpen) {
             checkLocationPermission();
+            checkAutostartStatus();
         }
-    }, [isSettingsOpen, checkLocationPermission]);
+    }, [isSettingsOpen, checkLocationPermission, checkAutostartStatus]);
 
     // ... (rest of code)
 
@@ -156,22 +159,54 @@ export const Dashboard = () => {
         return () => clearInterval(interval);
     }, [updateCountdown]);
 
-    // 3. Check for updates on mount and every 6 hours
+    // 3. Check for updates on mount, window focus, system wake, and periodically
     useEffect(() => {
+        // Minimum interval between checks (5 minutes) to prevent excessive requests
+        const MIN_CHECK_INTERVAL = 5 * 60 * 1000;
+        let lastCheckTime = 0;
+
+        const checkWithDebounce = () => {
+            const now = Date.now();
+            if (now - lastCheckTime >= MIN_CHECK_INTERVAL) {
+                lastCheckTime = now;
+                console.log('Checking for updates...');
+                checkForUpdates();
+            } else {
+                console.log('Update check skipped (debounced)');
+            }
+        };
+
         // Initial check with delay to not block initial render
         const initialTimer = setTimeout(() => {
+            lastCheckTime = Date.now();
             checkForUpdates();
         }, 5000);
 
-        // Periodic check every 6 hours (6 * 60 * 60 * 1000 = 21600000ms)
+        // Periodic check every 1 hour
         const interval = setInterval(() => {
-            console.log('Checking for updates (periodic 6h check)...');
-            checkForUpdates();
-        }, 6 * 60 * 60 * 1000);
+            console.log('Periodic update check (1h)...');
+            checkWithDebounce();
+        }, 60 * 60 * 1000);
+
+        // Check on window focus (user clicks menu bar icon)
+        const handleFocus = () => {
+            console.log('Window focused, checking for updates...');
+            checkWithDebounce();
+        };
+        window.addEventListener('focus', handleFocus);
+
+        // Check on system wake (from Rust scheduler)
+        let unlistenWake: (() => void) | undefined;
+        listen('system-wake', () => {
+            console.log('System wake detected, checking for updates...');
+            checkWithDebounce();
+        }).then(fn => { unlistenWake = fn; });
 
         return () => {
             clearTimeout(initialTimer);
             clearInterval(interval);
+            window.removeEventListener('focus', handleFocus);
+            unlistenWake?.();
         };
     }, [checkForUpdates]);
 
@@ -226,15 +261,6 @@ export const Dashboard = () => {
             case 'adhan': return <Volume2 className="w-4 h-4 text-primary" />;
         }
     };
-
-    if (loading || !todayTimes) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full space-y-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                <p className="text-muted-foreground text-sm">Fetching Prayer Times...</p>
-            </div>
-        );
-    }
 
     return (
         <div className="relative flex flex-col h-full p-4 space-y-2 overflow-hidden">
@@ -622,6 +648,39 @@ export const Dashboard = () => {
                         </button>
                     </div>
 
+                    <div className="h-px bg-border my-2" />
+
+                    {/* Autostart */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                                <Power className="w-3.5 h-3.5 text-muted-foreground" />
+                                <span className="text-sm font-medium">Launch at Login</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground leading-tight">
+                                Start Sajda automatically when you log in
+                            </span>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                playToggleSound();
+                                await toggleAutostart();
+                                trackSettingChanged('autostart', !autostartEnabled);
+                            }}
+                            disabled={autostartLoading}
+                            className={cn(
+                                "w-9 h-5 rounded-full transition-colors relative",
+                                autostartEnabled ? "bg-primary" : "bg-muted",
+                                autostartLoading && "opacity-50 cursor-not-allowed"
+                            )}
+                        >
+                            <div className={cn(
+                                "absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200",
+                                autostartEnabled ? "left-5" : "left-1"
+                            )} />
+                        </button>
+                    </div>
+
                 </div>
 
                 {/* Credit Footer */}
@@ -783,15 +842,18 @@ export const Dashboard = () => {
                 />
             </div>
 
-            {/* Header / Date */}
-            <div className="text-center space-y-1 font-buda mt-6">
-                <h2 className="text-xl font-bold text-foreground tracking-wide leading-tight">
-                    {todayTimes ? renderHijri(todayTimes.hijri || "") : "..."}
-                </h2>
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-widest opacity-90">
-                    {renderGregorian()}
-                </p>
-            </div>
+            {/* Main Content - Show skeleton while loading */}
+            {todayTimes ? (
+                <>
+                    {/* Header / Date */}
+                    <div className="text-center space-y-1 font-buda mt-6">
+                        <h2 className="text-xl font-bold text-foreground tracking-wide leading-tight">
+                            {renderHijri(todayTimes.hijri || "")}
+                        </h2>
+                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-widest opacity-90">
+                            {renderGregorian()}
+                        </p>
+                    </div>
 
             {/* Main Countdown */}
             <div className="flex-1 flex flex-col items-center justify-center space-y-1 py-1">
@@ -1009,6 +1071,10 @@ export const Dashboard = () => {
                     )}
                 </div>
             </div>
+                </>
+            ) : (
+                <DashboardSkeleton />
+            )}
         </div >
     );
 };

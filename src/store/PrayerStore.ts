@@ -28,6 +28,7 @@ interface PrayerStore {
     zone: string;
     todayTimes: PrayerTime | null;
     loading: boolean;
+    isZoneLoading: boolean; // Background zone detection in progress
     nextPrayer: NextPrayer | null;
     _intervalId: number | null;
     _unlisteners: (() => void)[];
@@ -35,16 +36,20 @@ interface PrayerStore {
 
     setZone: (zone: string) => void;
     fetchTimes: () => Promise<void>;
+    detectZoneInBackground: () => Promise<void>;
     updateCountdown: () => void;
     initializeListeners: () => Promise<void>;
     startLocationPolling: () => void;
     cleanup: () => void;
 }
 
+const ZONE_CACHE_KEY = 'sajda_last_zone';
+
 export const usePrayerStore = create<PrayerStore>((set, get) => ({
     zone: "WLY01",
     todayTimes: null,
     loading: false,
+    isZoneLoading: false,
     nextPrayer: null,
     _intervalId: null,
     _unlisteners: [],
@@ -54,32 +59,74 @@ export const usePrayerStore = create<PrayerStore>((set, get) => ({
 
     fetchTimes: async () => {
         set({ loading: true });
-        try {
-            // 1. Auto-detect Location & Push to Rust
-            try {
-                const { zone: detectedZone, lat, lng } = await LocationService.detectZone();
-                console.log("Auto-detected Zone:", detectedZone, lat, lng);
-                set({ zone: detectedZone });
 
-                // Push Coords to Rust
+        try {
+            // Phase 1: Use cached zone immediately (fast path)
+            const cachedZone = localStorage.getItem(ZONE_CACHE_KEY) || 'WLY01';
+            console.log("Using cached zone:", cachedZone);
+            set({ zone: cachedZone });
+
+            // Fetch times with cached zone (usually instant from Rust cache)
+            const times = await invoke<PrayerTime>("get_prayers");
+            console.log("Rust returned times:", times);
+            set({ todayTimes: times || null, loading: false });
+
+            // Phase 2: Background zone detection (fire-and-forget)
+            get().detectZoneInBackground();
+
+        } catch (error) {
+            console.error("Prayer fetch error:", error);
+            trackError('prayer_fetch', error instanceof Error ? error.message : 'Failed to fetch prayer times');
+            set({ loading: false });
+
+            // Still try background detection even if initial fetch failed
+            get().detectZoneInBackground();
+        }
+    },
+
+    detectZoneInBackground: async () => {
+        const state = get();
+
+        // Prevent concurrent zone detection
+        if (state.isZoneLoading) {
+            console.log("Zone detection already in progress, skipping");
+            return;
+        }
+
+        set({ isZoneLoading: true });
+        console.log("Starting background zone detection...");
+
+        try {
+            const { zone: detectedZone, lat, lng } = await LocationService.detectZone();
+            const currentZone = get().zone;
+
+            console.log(`Zone detection complete: detected=${detectedZone}, current=${currentZone}`);
+
+            // Only update if zone actually changed
+            if (detectedZone !== currentZone) {
+                console.log(`Zone changed: ${currentZone} -> ${detectedZone}`);
+                set({ zone: detectedZone });
+                localStorage.setItem(ZONE_CACHE_KEY, detectedZone);
+
+                // Update coordinates and refetch times
+                if (lat !== 0 || lng !== 0) {
+                    await invoke("update_coordinates", { lat, lng });
+                    const times = await invoke<PrayerTime>("get_prayers");
+                    console.log("Refreshed times after zone change:", times);
+                    set({ todayTimes: times || null });
+                }
+            } else {
+                // Zone same, still cache and update coords if available
+                localStorage.setItem(ZONE_CACHE_KEY, detectedZone);
                 if (lat !== 0 || lng !== 0) {
                     await invoke("update_coordinates", { lat, lng });
                 }
-            } catch (e) {
-                console.error("Zone detection failed", e);
-                trackError('location_detection', e instanceof Error ? e.message : 'Zone detection failed');
             }
-
-            // 2. Fetch Times from Rust
-            const times = await invoke<PrayerTime>("get_prayers");
-            console.log("Rust returned times:", times);
-
-            set({ todayTimes: times || null, loading: false });
-
-        } catch (error) {
-            console.error(error);
-            trackError('prayer_fetch', error instanceof Error ? error.message : 'Failed to fetch prayer times');
-            set({ loading: false });
+        } catch (e) {
+            console.error("Background zone detection failed:", e);
+            trackError('location_detection', e instanceof Error ? e.message : 'Zone detection failed');
+        } finally {
+            set({ isZoneLoading: false });
         }
     },
 

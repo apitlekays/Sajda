@@ -36,7 +36,8 @@ source ~/.nvm/nvm.sh && nvm use 22.22.0
 
 ```
 src/                    # React/TypeScript frontend
-  components/           # UI components (Dashboard.tsx, ErrorBoundary.tsx)
+  components/           # UI components (Dashboard.tsx, ErrorBoundary.tsx, Skeleton.tsx, DashboardSkeleton.tsx)
+  hooks/                # Custom React hooks (useBackgroundInit.ts)
   store/                # Zustand stores (Prayer, Reminder, Settings, Tracker)
   utils/                # Services (Audio, Location, Reminder, ZoneData, HijriDate, UISounds, MalayDictionary)
   data/                 # Static data (reminders, dua.json, sahih_bukhari.json)
@@ -58,6 +59,47 @@ public/                 # Static assets, fonts, icons
 - Communication between frontend and backend via Tauri IPC commands (`invoke()`) and events (`app.emit()` / `listen()`)
 - Prayer times: JAKIM API for Malaysia, Salah library fallback for global locations
 - Tauri plugins: autostart, notification, store, positioner, opener
+
+### Two-Phase Initialization
+
+The app uses a two-phase initialization pattern for instant responsiveness:
+
+**Phase 1: Critical Path (~100ms)**
+- `loadSettings()` — Load settings from disk
+- `loadRecords()` — Load tracker records from disk
+- Render Dashboard with skeleton immediately
+
+**Phase 2: Background (fire-and-forget)**
+- `initAnalytics()` — PostHog initialization
+- `checkAutostartStatus()` — Sync autostart state
+- `syncLocationAuth()` — Location permission check
+- `fetchTimes()` — Prayer times (shows skeleton first)
+- First-run setup — Permission dialogs (if needed)
+
+**Key files:**
+- `src/App.tsx` — Two-phase initialization with `useBackgroundInit()` hook
+- `src/hooks/useBackgroundInit.ts` — Background operations hook
+- `src/store/PrayerStore.ts` — Two-phase fetch with zone caching
+
+### Skeleton Loading & Progressive Rendering
+
+The app displays skeleton placeholders while data loads, ensuring instant visual feedback:
+
+**Components:**
+- `src/components/Skeleton.tsx` — Base skeleton primitive with `animate-pulse` effect
+- `src/components/DashboardSkeleton.tsx` — Full Dashboard layout skeleton
+
+**How it works:**
+1. Dashboard renders immediately with settings/drawers always accessible
+2. If `todayTimes` is null, shows `<DashboardSkeleton />`
+3. When prayer times load, skeleton is replaced with actual content
+4. Zone detection runs in background via `detectZoneInBackground()`
+
+**Zone Caching:**
+- Cached zone stored in localStorage (`sajda_last_zone`)
+- On startup, uses cached zone for instant prayer times
+- Background detection updates zone only if it changed
+- Prevents blocking UI on slow GPS/IP geolocation
 
 ### Native Location (macOS Core Location)
 
@@ -144,6 +186,11 @@ All Malay language terms are centralized in `src/utils/MalayDictionary.ts` for c
 ### Frontend Components
 - `src/components/Dashboard.tsx` — Main UI component (settings, reminder modal, prayer list, key dates)
 - `src/components/ErrorBoundary.tsx` — React error boundary for graceful error handling
+- `src/components/Skeleton.tsx` — Base skeleton loading primitive
+- `src/components/DashboardSkeleton.tsx` — Full Dashboard skeleton for loading state
+
+### Hooks
+- `src/hooks/useBackgroundInit.ts` — Background initialization hook (analytics, autostart, location sync)
 
 ### Stores
 - `src/store/PrayerStore.ts` — Prayer times state management

@@ -54,6 +54,7 @@
 - **Prayer Habit Tracker** — Daily checkbox tracker that resets at midnight.
 - **Current Prayer Highlight** — Green highlight on the active prayer period.
 - **Rich Dashboard** — Beautiful, glassmorphic UI with smooth animations.
+- **Instant Responsiveness** — Skeleton loading for immediate app responsiveness on launch.
 - **Version Display** — App version shown in footer, auto-synced from package.json.
 - **Native Performance** — Built on Tauri v2 for an ultra-lightweight footprint (~5MB).
 
@@ -78,9 +79,9 @@ The app is code-signed with a Developer ID certificate and supports automatic up
 
 | Suite | Tests | Status |
 |-------|-------|--------|
-| Frontend (Vitest) | 6 | ✅ |
+| Frontend (Vitest) | 102 | ✅ |
 | Backend (Cargo) | 25 | ✅ |
-| **Total** | **31** | ✅ |
+| **Total** | **127** | ✅ |
 
 ```bash
 # Run frontend tests

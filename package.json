@@ -1,7 +1,7 @@
 {
   "name": "sajda",
   "private": true,
-  "version": "0.0.14",
+  "version": "0.0.15",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,8 @@
     "test:ui": "vitest --ui",
     "test:rust": "cd src-tauri && cargo test",
     "test:all": "npm test && npm run test:rust",
+    "dev:reset": "./scripts/dev-reset.sh",
+    "dev:fresh": "./scripts/dev-reset.sh && npm run tauri dev",
     "sourcemap:inject": "posthog-cli sourcemap inject --directory ./dist/assets --project sajda --version $npm_package_version",
     "sourcemap:upload": "posthog-cli sourcemap upload --directory ./dist/assets --host https://eu.posthog.com",
     "sourcemap:release": "npm run sourcemap:inject && npm run sourcemap:upload"
