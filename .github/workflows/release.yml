@@ -114,7 +114,7 @@ jobs:
           releaseBody: 'See release notes for details.'
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: false
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
 
       - name: Sign and upload signature file (macOS)
@@ -144,51 +144,6 @@ jobs:
           echo "Uploading signature to release..."
           gh release upload "v${VERSION}" "Sajda_${{ matrix.arch }}.app.tar.gz.sig" --clobber
           echo "Uploaded signature for ${{ matrix.arch }}"
-
-      - name: Sign and upload signature file (Windows)
-        if: matrix.os_type == 'windows'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        shell: pwsh
-        run: |
-          $VERSION = "${{ github.ref_name }}".TrimStart('v')
-
-          Write-Host "Downloading NSIS zip from release..."
-          $maxRetries = 3
-          $retryCount = 0
-          $success = $false
-
-          while (-not $success -and $retryCount -lt $maxRetries) {
-            try {
-              gh release download "v$VERSION" --pattern "Sajda_${VERSION}_x64-setup.nsis.zip" --dir . 2>$null
-              if (Test-Path "Sajda_${VERSION}_x64-setup.nsis.zip") {
-                $success = $true
-              }
-            } catch {
-              $retryCount++
-              Write-Host "Retry $retryCount..."
-              Start-Sleep -Seconds 10
-            }
-          }
-
-          if (-not $success) {
-            Write-Host "WARNING: Could not download NSIS zip, skipping signing"
-            exit 0
-          }
-
-          Get-ChildItem "Sajda_${VERSION}_x64-setup.nsis.zip"
-
-          Write-Host "Signing the NSIS zip file..."
-          npx tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "Sajda_${VERSION}_x64-setup.nsis.zip"
-
-          Write-Host "Signature content:"
-          Get-Content "Sajda_${VERSION}_x64-setup.nsis.zip.sig"
-
-          Write-Host "Uploading signature to release..."
-          gh release upload "v$VERSION" "Sajda_${VERSION}_x64-setup.nsis.zip.sig" --clobber
-          Write-Host "Uploaded Windows signature"
 
   publish-updater:
     needs: release
