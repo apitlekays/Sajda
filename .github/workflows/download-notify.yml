@@ -18,30 +18,47 @@ jobs:
       - name: Get current download counts
         id: current
         run: |
-          # Calculate total DMG downloads
-          TOTAL=$(gh api repos/${{ github.repository }}/releases --jq '
+          # Get macOS downloads (.dmg files)
+          MACOS=$(gh api repos/${{ github.repository }}/releases --jq '
             [.[] | select(.draft == false) | .assets[] | select(.name | endswith(".dmg")) | .download_count] | add // 0
           ')
+          echo "macos=$MACOS" >> $GITHUB_OUTPUT
+
+          # Get Windows downloads (.exe files)
+          WINDOWS=$(gh api repos/${{ github.repository }}/releases --jq '
+            [.[] | select(.draft == false) | .assets[] | select(.name | endswith(".exe")) | .download_count] | add // 0
+          ')
+          echo "windows=$WINDOWS" >> $GITHUB_OUTPUT
+
+          # Calculate total
+          TOTAL=$((MACOS + WINDOWS))
           echo "total=$TOTAL" >> $GITHUB_OUTPUT
-          echo "Current total: $TOTAL"
+
+          echo "Current counts - macOS: $MACOS, Windows: $WINDOWS, Total: $TOTAL"
 
       - name: Get previous counts from cache
         id: cache
         uses: actions/cache/restore@v4
         with:
-          path: download-counts.txt
-          key: sajda-download-counts
+          path: download-counts.json
+          key: sajda-download-counts-v2
 
       - name: Read previous counts
         id: previous
         run: |
-          if [ -f download-counts.txt ]; then
-            PREV=$(cat download-counts.txt)
-            echo "total=$PREV" >> $GITHUB_OUTPUT
-            echo "Previous total from cache: $PREV"
+          if [ -f download-counts.json ]; then
+            PREV_MACOS=$(jq -r '.macos // 0' download-counts.json)
+            PREV_WINDOWS=$(jq -r '.windows // 0' download-counts.json)
+            PREV_TOTAL=$(jq -r '.total // 0' download-counts.json)
+            echo "macos=$PREV_MACOS" >> $GITHUB_OUTPUT
+            echo "windows=$PREV_WINDOWS" >> $GITHUB_OUTPUT
+            echo "total=$PREV_TOTAL" >> $GITHUB_OUTPUT
+            echo "Previous counts - macOS: $PREV_MACOS, Windows: $PREV_WINDOWS, Total: $PREV_TOTAL"
           else
+            echo "macos=0" >> $GITHUB_OUTPUT
+            echo "windows=0" >> $GITHUB_OUTPUT
             echo "total=0" >> $GITHUB_OUTPUT
-            echo "No previous count found, starting fresh"
+            echo "No previous counts found, starting fresh"
           fi
 
       - name: Check for new downloads and notify
@@ -49,32 +66,62 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          CURRENT="${{ steps.current.outputs.total }}"
-          PREVIOUS="${{ steps.previous.outputs.total }}"
-          echo "Previous total: $PREVIOUS"
-          echo "Current total: $CURRENT"
-          if [ "$CURRENT" -gt "$PREVIOUS" ]; then
-            DIFF=$((CURRENT - PREVIOUS))
+          CURRENT_MACOS="${{ steps.current.outputs.macos }}"
+          CURRENT_WINDOWS="${{ steps.current.outputs.windows }}"
+          CURRENT_TOTAL="${{ steps.current.outputs.total }}"
+
+          PREVIOUS_MACOS="${{ steps.previous.outputs.macos }}"
+          PREVIOUS_WINDOWS="${{ steps.previous.outputs.windows }}"
+          PREVIOUS_TOTAL="${{ steps.previous.outputs.total }}"
+
+          echo "Previous - macOS: $PREVIOUS_MACOS, Windows: $PREVIOUS_WINDOWS, Total: $PREVIOUS_TOTAL"
+          echo "Current  - macOS: $CURRENT_MACOS, Windows: $CURRENT_WINDOWS, Total: $CURRENT_TOTAL"
+
+          if [ "$CURRENT_TOTAL" -gt "$PREVIOUS_TOTAL" ]; then
+            DIFF_TOTAL=$((CURRENT_TOTAL - PREVIOUS_TOTAL))
+            DIFF_MACOS=$((CURRENT_MACOS - PREVIOUS_MACOS))
+            DIFF_WINDOWS=$((CURRENT_WINDOWS - PREVIOUS_WINDOWS))
+
             LATEST_VERSION=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name')
-            MESSAGE="📥 Sajda Download Alert%0A%0A+${DIFF} new download(s)!%0A%0A📊 Total Downloads: ${CURRENT}%0A🏷️ Latest Version: ${LATEST_VERSION}%0A%0Ahttps://github.com/${{ github.repository }}/releases"
-            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" -d "chat_id=${TELEGRAM_CHAT_ID}" -d "text=${MESSAGE}"
-            echo "Notification sent: +$DIFF downloads"
+
+            # Build platform breakdown for new downloads
+            BREAKDOWN=""
+            if [ "$DIFF_MACOS" -gt 0 ]; then
+              BREAKDOWN="${BREAKDOWN}🍎 macOS: +${DIFF_MACOS}%0A"
+            fi
+            if [ "$DIFF_WINDOWS" -gt 0 ]; then
+              BREAKDOWN="${BREAKDOWN}🪟 Windows: +${DIFF_WINDOWS}%0A"
+            fi
+
+            MESSAGE="📥 Sajda Download Alert%0A%0A+${DIFF_TOTAL} new download(s)!%0A${BREAKDOWN}%0A📊 Total Downloads: ${CURRENT_TOTAL}%0A├ 🍎 macOS: ${CURRENT_MACOS}%0A└ 🪟 Windows: ${CURRENT_WINDOWS}%0A%0A🏷️ Latest: ${LATEST_VERSION}%0A%0Ahttps://github.com/${{ github.repository }}/releases"
+
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d "chat_id=${TELEGRAM_CHAT_ID}" \
+              -d "text=${MESSAGE}"
+
+            echo "Notification sent: +$DIFF_TOTAL downloads (macOS: +$DIFF_MACOS, Windows: +$DIFF_WINDOWS)"
           else
-            echo "No new downloads detected (current=$CURRENT, previous=$PREVIOUS)"
+            echo "No new downloads detected"
           fi
 
       - name: Save current counts
         run: |
-          echo "${{ steps.current.outputs.total }}" > download-counts.txt
-          cat download-counts.txt
+          jq -n \
+            --argjson macos "${{ steps.current.outputs.macos }}" \
+            --argjson windows "${{ steps.current.outputs.windows }}" \
+            --argjson total "${{ steps.current.outputs.total }}" \
+            '{macos: $macos, windows: $windows, total: $total}' > download-counts.json
+          cat download-counts.json
 
       - name: Delete old cache
         continue-on-error: true
         run: |
+          gh cache delete sajda-download-counts-v2 --repo ${{ github.repository }} || true
+          # Also delete old v1 cache if it exists
           gh cache delete sajda-download-counts --repo ${{ github.repository }} || true
 
       - name: Save new cache
         uses: actions/cache/save@v4
         with:
-          path: download-counts.txt
-          key: sajda-download-counts
+          path: download-counts.json
+          key: sajda-download-counts-v2
