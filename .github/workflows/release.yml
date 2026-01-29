@@ -13,14 +13,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macOS builds
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
             arch: 'aarch64'
             target: 'aarch64-apple-darwin'
+            os_type: 'macos'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
             arch: 'x64'
             target: 'x86_64-apple-darwin'
+            os_type: 'macos'
+          # Windows build
+          - platform: 'windows-latest'
+            args: '--target x86_64-pc-windows-msvc'
+            arch: 'x64-win'
+            target: 'x86_64-pc-windows-msvc'
+            os_type: 'windows'
 
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 45
@@ -33,21 +42,29 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Install Rust stable
+      - name: Install Rust stable (macOS)
+        if: matrix.os_type == 'macos'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install Rust stable (Windows)
+        if: matrix.os_type == 'windows'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          shared-key: ${{ matrix.args }}
+          shared-key: ${{ matrix.target }}
 
       - name: Install dependencies
         run: npm ci
 
       - name: Import Apple Certificate
+        if: matrix.os_type == 'macos'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -61,8 +78,9 @@ jobs:
           security set-keychain-settings -t 3600 -u build.keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
-      - name: Build and Release
-        id: tauri
+      - name: Build and Release (macOS)
+        if: matrix.os_type == 'macos'
+        id: tauri-macos
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,7 +90,6 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Fix Swift runtime linking for older macOS versions (10.15+)
-          # Without this, the binary uses @rpath/libswiftCore.dylib which fails on macOS 12
           MACOSX_DEPLOYMENT_TARGET: "10.15"
         with:
           tagName: v__VERSION__
@@ -83,7 +100,25 @@ jobs:
           includeUpdaterJson: false
           args: ${{ matrix.args }}
 
-      - name: Sign and upload signature file
+      - name: Build and Release (Windows)
+        if: matrix.os_type == 'windows'
+        id: tauri-windows
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Sajda v__VERSION__'
+          releaseBody: 'See release notes for details.'
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}
+
+      - name: Sign and upload signature file (macOS)
+        if: matrix.os_type == 'macos'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -101,7 +136,6 @@ jobs:
           ls -la Sajda_${{ matrix.arch }}.app.tar.gz
 
           echo "Signing the tar.gz file..."
-          # Use tauri CLI to sign the file
           npx tauri signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "Sajda_${{ matrix.arch }}.app.tar.gz"
 
           echo "Signature content:"
@@ -110,6 +144,51 @@ jobs:
           echo "Uploading signature to release..."
           gh release upload "v${VERSION}" "Sajda_${{ matrix.arch }}.app.tar.gz.sig" --clobber
           echo "Uploaded signature for ${{ matrix.arch }}"
+
+      - name: Sign and upload signature file (Windows)
+        if: matrix.os_type == 'windows'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}".TrimStart('v')
+
+          Write-Host "Downloading NSIS zip from release..."
+          $maxRetries = 3
+          $retryCount = 0
+          $success = $false
+
+          while (-not $success -and $retryCount -lt $maxRetries) {
+            try {
+              gh release download "v$VERSION" --pattern "Sajda_${VERSION}_x64-setup.nsis.zip" --dir . 2>$null
+              if (Test-Path "Sajda_${VERSION}_x64-setup.nsis.zip") {
+                $success = $true
+              }
+            } catch {
+              $retryCount++
+              Write-Host "Retry $retryCount..."
+              Start-Sleep -Seconds 10
+            }
+          }
+
+          if (-not $success) {
+            Write-Host "WARNING: Could not download NSIS zip, skipping signing"
+            exit 0
+          }
+
+          Get-ChildItem "Sajda_${VERSION}_x64-setup.nsis.zip"
+
+          Write-Host "Signing the NSIS zip file..."
+          npx tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "Sajda_${VERSION}_x64-setup.nsis.zip"
+
+          Write-Host "Signature content:"
+          Get-Content "Sajda_${VERSION}_x64-setup.nsis.zip.sig"
+
+          Write-Host "Uploading signature to release..."
+          gh release upload "v$VERSION" "Sajda_${VERSION}_x64-setup.nsis.zip.sig" --clobber
+          Write-Host "Uploaded Windows signature"
 
   publish-updater:
     needs: release
@@ -130,12 +209,25 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p ./signatures
 
-          for i in {1..10}; do
+          # Wait for all signature files (macOS + Windows)
+          for i in {1..15}; do
             echo "Attempt $i: Downloading signature files..."
             gh release download "v${VERSION}" --pattern "*.sig" --dir ./signatures --clobber 2>/dev/null || true
 
-            if [ -f "./signatures/Sajda_aarch64.app.tar.gz.sig" ] && [ -f "./signatures/Sajda_x64.app.tar.gz.sig" ]; then
-              echo "Both signature files found!"
+            MACOS_ARM=$(test -f "./signatures/Sajda_aarch64.app.tar.gz.sig" && echo "yes" || echo "no")
+            MACOS_X64=$(test -f "./signatures/Sajda_x64.app.tar.gz.sig" && echo "yes" || echo "no")
+            WIN_X64=$(test -f "./signatures/Sajda_${VERSION}_x64-setup.nsis.zip.sig" && echo "yes" || echo "no")
+
+            echo "  macOS ARM: $MACOS_ARM, macOS x64: $MACOS_X64, Windows x64: $WIN_X64"
+
+            if [ "$MACOS_ARM" = "yes" ] && [ "$MACOS_X64" = "yes" ] && [ "$WIN_X64" = "yes" ]; then
+              echo "All signature files found!"
+              break
+            fi
+
+            # After 10 attempts, proceed with what we have (Windows might not be ready)
+            if [ $i -ge 10 ] && [ "$MACOS_ARM" = "yes" ] && [ "$MACOS_X64" = "yes" ]; then
+              echo "macOS signatures found, proceeding (Windows may be missing)"
               break
             fi
 
@@ -155,6 +247,7 @@ jobs:
 
           AARCH64_SIG=""
           X64_SIG=""
+          WIN_X64_SIG=""
 
           if [ -f "./signatures/Sajda_aarch64.app.tar.gz.sig" ]; then
             AARCH64_SIG=$(cat ./signatures/Sajda_aarch64.app.tar.gz.sig)
@@ -170,7 +263,14 @@ jobs:
             echo "WARNING: x64 signature not found"
           fi
 
-          # Use jq to generate valid JSON
+          if [ -f "./signatures/Sajda_${VERSION}_x64-setup.nsis.zip.sig" ]; then
+            WIN_X64_SIG=$(cat ./signatures/Sajda_${VERSION}_x64-setup.nsis.zip.sig)
+            echo "Found Windows x64 signature"
+          else
+            echo "WARNING: Windows x64 signature not found"
+          fi
+
+          # Generate latest.json with all platforms
           jq -n \
             --arg version "$VERSION" \
             --arg notes "See release notes for details." \
@@ -179,6 +279,8 @@ jobs:
             --arg aarch64_url "https://github.com/${REPO}/releases/download/v${VERSION}/Sajda_aarch64.app.tar.gz" \
             --arg x64_sig "$X64_SIG" \
             --arg x64_url "https://github.com/${REPO}/releases/download/v${VERSION}/Sajda_x64.app.tar.gz" \
+            --arg win_x64_sig "$WIN_X64_SIG" \
+            --arg win_x64_url "https://github.com/${REPO}/releases/download/v${VERSION}/Sajda_${VERSION}_x64-setup.nsis.zip" \
             '{
               version: $version,
               notes: $notes,
@@ -191,6 +293,10 @@ jobs:
                 "darwin-x86_64": {
                   signature: $x64_sig,
                   url: $x64_url
+                },
+                "windows-x86_64": {
+                  signature: $win_x64_sig,
+                  url: $win_x64_url
                 }
               }
             }' > latest.json

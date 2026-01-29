@@ -39,11 +39,11 @@ describe('LocationService', () => {
         });
     });
 
-    describe('getMacOSVersion', () => {
-        it('should return macOS version string', async () => {
+    describe('getOSVersion', () => {
+        it('should return OS version string', async () => {
             mockedInvoke.mockResolvedValueOnce('14.2');
 
-            const result = await LocationService.getMacOSVersion();
+            const result = await LocationService.getOSVersion();
 
             expect(result).toBe('14.2');
             expect(mockedInvoke).toHaveBeenCalledWith('get_macos_version_cmd');
@@ -52,7 +52,7 @@ describe('LocationService', () => {
         it('should return "0.0" when invoke fails', async () => {
             mockedInvoke.mockRejectedValueOnce(new Error('Failed'));
 
-            const result = await LocationService.getMacOSVersion();
+            const result = await LocationService.getOSVersion();
 
             expect(result).toBe('0.0');
         });

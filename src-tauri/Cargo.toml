@@ -1,7 +1,7 @@
 [package]
 name = "sajda"
-version = "0.0.15"
-description = "Modern Islamic Prayer Times & Reminder App for macOS"
+version = "0.1.0"
+description = "Modern Islamic Prayer Times & Reminder App"
 authors = ["Hafiz Hanif"]
 edition = "2021"
 
@@ -16,6 +16,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+# macOS-only build dependency for Swift FFI
+[target.'cfg(target_os = "macos")'.build-dependencies]
 swift-rs = { version = "1.0.7", features = ["build"] }
 
 [dependencies]
@@ -37,7 +40,18 @@ salah = "0.7.6"
 chrono = "0.4.43"
 tokio = "1.49.0"
 image = "0.25"
+
+# macOS-only dependency for Swift FFI (Core Location)
+[target.'cfg(target_os = "macos")'.dependencies]
 swift-rs = "1.0.7"
+
+# Windows-only dependency for native geolocation
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Devices_Geolocation",
+    "Foundation",
+    "Foundation_Collections",
+] }
 
 [dev-dependencies]
 tokio-test = "0.4"

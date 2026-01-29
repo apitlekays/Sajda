@@ -1,7 +1,7 @@
 <div align="center">
   <img src="public/128x128@2x.png" alt="Sajda Logo" width="128" height="128" />
   <h1>Sajda</h1>
-  <p><strong>Modern Islamic Prayer Times & Reminder App for macOS</strong></p>
+  <p><strong>Modern Islamic Prayer Times & Reminder App for macOS & Windows</strong></p>
 
   [![Tauri](https://img.shields.io/badge/Tauri-v2-FEC00E?style=for-the-badge&logo=tauri&logoColor=black)](https://tauri.app)
   [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -12,7 +12,7 @@
 
 <br />
 
-**Sajda** is a beautiful, unobtrusive menu bar application designed to keep you connected with your prayers. Built with the performance of Rust and the flexibility of React, it leverages the official JAKIM API for accurate Malaysian prayer times, optionally falling back to calculation methods for global support.
+**Sajda** is a beautiful, unobtrusive menu bar/system tray application designed to keep you connected with your prayers. Built with the performance of Rust and the flexibility of React, it leverages the official JAKIM API for accurate Malaysian prayer times, optionally falling back to calculation methods for global support. Available on **macOS** and **Windows**.
 
 <div align="center">
   <img src="public/Sajda.png" alt="Sajda App Screenshot" width="500" />
@@ -23,7 +23,7 @@
 ### Prayer Times
 - **Accurate Prayer Times** — Directly sourced from JAKIM (Malaysia) or calculated locally (Global).
 - **Multiple Calculation Methods** — JAKIM, MUIS, MWL, ISNA, Umm Al-Qura, and more.
-- **Native GPS Location** — Uses macOS Core Location (10.15+) via Swift FFI for precise coordinates.
+- **Native GPS Location** — Uses platform-native location services (macOS Core Location, Windows Geolocation API) for precise coordinates.
 - **Smart Fallback** — Falls back to IP geolocation if native location is unavailable or denied.
 - **Location Toggle** — Enable/disable location services in settings with permission guidance.
 - **Hijri Calendar** — Integrated Islamic calendar display with date header.
@@ -65,23 +65,61 @@
 
 ## 🚀 Installation
 
-Download the latest `.dmg` from [Releases](https://github.com/apitlekays/Sajda/releases) and drag the `.app` to your Applications folder.
+### macOS
 
-The app is code-signed with a Developer ID certificate and supports automatic updates.
+Download the latest `.dmg` from [Releases](https://github.com/apitlekays/Sajda/releases):
+- **Apple Silicon (M1/M2/M3/M4):** `Sajda_X.Y.Z_aarch64.dmg`
+- **Intel:** `Sajda_X.Y.Z_x64.dmg`
+
+Drag the `.app` to your Applications folder. The app is code-signed with a Developer ID certificate and supports automatic updates.
+
+### Windows
+
+Download the latest `.exe` installer from [Releases](https://github.com/apitlekays/Sajda/releases):
+- **Windows 10/11 (64-bit):** `Sajda_X.Y.Z_x64-setup.exe`
+
+Run the installer and follow the prompts. The app supports automatic updates.
+
+<details>
+<summary><strong>Windows SmartScreen Warning</strong></summary>
+
+Since the Windows build is not code-signed, SmartScreen may show a warning on first run:
+
+1. Click **"More info"**
+2. Click **"Run anyway"**
+
+This is normal for unsigned applications. The app is safe to use.
+</details>
+
+<details>
+<summary><strong>Windows Location Services</strong></summary>
+
+For accurate prayer times based on GPS location:
+
+1. Open **Windows Settings**
+2. Go to **Privacy & Security** > **Location**
+3. Enable **Location services**
+4. Ensure **Let apps access your location** is enabled
+
+If location services are unavailable, the app automatically uses IP-based geolocation.
+</details>
 
 ## 🛠 Tech Stack
 
 - **Frontend**: React 19, TypeScript, Vite, TailwindCSS, Zustand
-- **Backend**: Rust (Tauri v2), Tokio, Rodio (Audio), Swift (Core Location via swift-rs)
+- **Backend**: Rust (Tauri v2), Tokio, Rodio (Audio)
+- **Platform Native**:
+  - macOS: Swift FFI for Core Location (via swift-rs)
+  - Windows: WinRT Geolocation API (via windows crate)
 - **Data Source**: WaktuSolat.app API (JAKIM), Salah library (Global calculations)
 
 ## 🧪 Testing
 
 | Suite | Tests | Status |
 |-------|-------|--------|
-| Frontend (Vitest) | 102 | ✅ |
-| Backend (Cargo) | 25 | ✅ |
-| **Total** | **127** | ✅ |
+| Frontend (Vitest) | 135 | ✅ |
+| Backend (Cargo) | 30 | ✅ |
+| **Total** | **165** | ✅ |
 
 ```bash
 # Run frontend tests

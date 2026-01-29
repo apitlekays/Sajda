@@ -8,6 +8,7 @@
 
 import posthog from 'posthog-js';
 import { getVersion } from '@tauri-apps/api/app';
+import { Platform } from './Platform';
 
 let isEnabled = true;
 
@@ -30,10 +31,11 @@ export async function initAnalytics(enabled: boolean = true): Promise<void> {
     try {
         const appVersion = await getVersion();
 
-        // Set user properties
+        // Set user properties with dynamic platform detection
         posthog.register({
             app_version: appVersion,
-            platform: 'macos',
+            platform: Platform.getPlatformName(),
+            platform_display: Platform.getPlatformDisplayName(),
             app_name: 'Sajda',
         });
 

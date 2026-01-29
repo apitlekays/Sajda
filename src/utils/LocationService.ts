@@ -1,6 +1,7 @@
 import axios from "axios";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../store/SettingsStore";
+import { Platform } from "./Platform";
 
 const API_BASE = "https://api.waktusolat.app/v2/solat";
 
@@ -28,8 +29,8 @@ interface NativeLocationResult {
 
 export const LocationService = {
     /**
-     * Check if native macOS Core Location is available
-     * Returns true on macOS 10.15+
+     * Check if native location services are available
+     * Returns true on macOS 10.15+ or Windows 10+
      */
     async isNativeLocationAvailable(): Promise<boolean> {
         try {
@@ -41,9 +42,10 @@ export const LocationService = {
     },
 
     /**
-     * Get macOS version string (e.g., "14.2")
+     * Get OS version string (e.g., "14.2" on macOS, "10.0" on Windows)
+     * Note: Command name kept for backward compatibility
      */
-    async getMacOSVersion(): Promise<string> {
+    async getOSVersion(): Promise<string> {
         try {
             return await invoke<string>("get_macos_version_cmd");
         } catch (e) {
@@ -254,5 +256,17 @@ export const LocationService = {
             console.error("Failed to fetch prayer times", error);
             throw error;
         }
+    },
+
+    /**
+     * Get platform-specific location permission guidance
+     * Provides user-friendly instructions for enabling location services
+     */
+    getLocationPermissionGuidance(): {
+        title: string;
+        message: string;
+        settingsPath?: string;
+    } {
+        return Platform.getLocationPermissionGuidance();
     }
 };
