@@ -182,17 +182,32 @@ pub fn run() {
             let _handle = app.handle().clone();
 
             // Initialize System Tray
-            // Load specific menubar icon (icon.png)
+            // Load platform-specific tray icon
+            // macOS: Use template icon (black silhouette) for automatic light/dark adaptation
+            // Windows: Use full-color icon since Windows tray doesn't support template icons
+            #[cfg(target_os = "macos")]
             let icon_bytes = include_bytes!("../icons/icon.png");
+            #[cfg(target_os = "windows")]
+            let icon_bytes = include_bytes!("../icons/icon_color.png");
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            let icon_bytes = include_bytes!("../icons/icon_color.png");
+
             let icon_img = image::load_from_memory(icon_bytes).expect("failed to decode tray icon");
             let (width, height) = (icon_img.width(), icon_img.height());
             let rgba = icon_img.into_rgba8().into_raw();
             let tray_icon = tauri::image::Image::new(&rgba, width, height);
 
-            let _tray = tauri::tray::TrayIconBuilder::with_id("main")
+            let mut tray_builder = tauri::tray::TrayIconBuilder::with_id("main")
                 .icon(tray_icon)
-                .icon_as_template(true)
-                .title("Sajda")
+                .title("Sajda");
+
+            // Only use template icon on macOS (Windows doesn't support this)
+            #[cfg(target_os = "macos")]
+            {
+                tray_builder = tray_builder.icon_as_template(true);
+            }
+
+            let _tray = tray_builder
                 .on_tray_icon_event(move |tray, event| {
                     tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
 

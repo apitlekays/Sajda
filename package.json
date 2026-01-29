@@ -1,7 +1,7 @@
 {
   "name": "sajda",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,7 +18,8 @@
     "dev:fresh": "./scripts/dev-reset.sh && npm run tauri dev",
     "sourcemap:inject": "posthog-cli sourcemap inject --directory ./dist/assets --project sajda --version $npm_package_version",
     "sourcemap:upload": "posthog-cli sourcemap upload --directory ./dist/assets --host https://eu.posthog.com",
-    "sourcemap:release": "npm run sourcemap:inject && npm run sourcemap:upload"
+    "sourcemap:release": "npm run sourcemap:inject && npm run sourcemap:upload",
+    "generate-icons": "node scripts/generate-icons.js"
   },
   "dependencies": {
     "@posthog/react": "^1.7.0",
@@ -54,7 +55,9 @@
     "@vitest/coverage-v8": "^3.1.4",
     "autoprefixer": "^10.4.23",
     "jsdom": "^26.1.0",
+    "png-to-ico": "^3.0.1",
     "postcss": "^8.5.6",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
