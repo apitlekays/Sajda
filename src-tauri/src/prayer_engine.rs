@@ -144,7 +144,10 @@ impl PrayerEngine {
             return true;
         };
         if let Some(cache) = cache_guard.as_ref() {
-            let now_month = Local::now().format("%b-%Y").to_string();
+            let now_month = jakim_api::make_month_hash(
+                chrono::Local::now().month(),
+                chrono::Local::now().year(),
+            );
             if cache.month_hash != now_month {
                 return true;
             }
@@ -191,8 +194,12 @@ impl PrayerEngine {
 
     pub fn get_today_schedule(&self) -> Option<PrayerSchedule> {
         let now = Local::now();
-        // API date key format: "dd-MMM-yyyy", e.g. "23-Jan-2026"
-        let date_key = now.format("%d-%b-%Y").to_string();
+        let date_key = jakim_api::make_date_key(
+            now.day() as i32,
+            now.month(),
+            now.year(),
+        );
+        let now_month_hash = jakim_api::make_month_hash(now.month(), now.year());
 
         // 1. Try Cache (ONLY if method is JAKIM)
         {
@@ -200,19 +207,21 @@ impl PrayerEngine {
             if *current_method == "JAKIM" {
                 let cache = self.cache.lock().ok()?;
                 if let Some(c) = cache.as_ref() {
-                    if let Some(p) = c.prayers.get(&date_key) {
-                        return Some(PrayerSchedule {
-                            fajr: p.fajr,
-                            syuruk: p.syuruk,
-                            dhuhr: p.dhuhr,
-                            asr: p.asr,
-                            maghrib: p.maghrib,
-                            isha: p.isha,
-                            source: "jakim-api".to_string(),
-                            zone_code: c.zone.clone(),
-                            zone_name: self.resolve_zone_name(&c.zone),
-                            hijri: p.hijri.clone(),
-                        });
+                    if c.month_hash == now_month_hash {
+                        if let Some(p) = c.prayers.get(&date_key) {
+                            return Some(PrayerSchedule {
+                                fajr: p.fajr,
+                                syuruk: p.syuruk,
+                                dhuhr: p.dhuhr,
+                                asr: p.asr,
+                                maghrib: p.maghrib,
+                                isha: p.isha,
+                                source: "jakim-api".to_string(),
+                                zone_code: c.zone.clone(),
+                                zone_name: self.resolve_zone_name(&c.zone),
+                                hijri: p.hijri.clone(),
+                            });
+                        }
                     }
                 }
             }
@@ -275,7 +284,11 @@ impl PrayerEngine {
         }
 
         let tomorrow = now.date_naive().succ_opt()?;
-        let tom_key = tomorrow.format("%d-%b-%Y").to_string();
+        let tom_key = jakim_api::make_date_key(
+            tomorrow.day() as i32,
+            tomorrow.month(),
+            tomorrow.year(),
+        );
 
         let mut tom_fajr: i64 = 0;
         let mut found = false;

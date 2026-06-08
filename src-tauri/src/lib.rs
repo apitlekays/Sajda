@@ -48,34 +48,8 @@ fn update_coordinates(app: tauri::AppHandle, lat: f64, lng: f64) {
                     // 1. Save to Disk
                     let _ = jakim_api::save_cache(&handle, lat, lng, &data);
 
-                    // 2. Update In-Memory Cache manually
-                    let month_capitalized = format!(
-                        "{}{}",
-                        data.month.chars().next().unwrap_or_default().to_uppercase(),
-                        data.month
-                            .chars()
-                            .skip(1)
-                            .collect::<String>()
-                            .to_lowercase()
-                    );
-
-                    let mut map = std::collections::HashMap::new();
-                    for p in &data.prayers {
-                        let key = format!("{:02}-{}-{}", p.day, month_capitalized, data.year);
-                        //  println!("Rust: Debug Key Insert: {}", key); // Spammy
-                        map.insert(key, p.clone());
-                    }
-
-                    let month_hash = format!("{}-{}", month_capitalized, data.year);
-
-                    let new_cache = jakim_api::JakimCache {
-                        zone: data.zone,
-                        lat,
-                        lng,
-                        month_hash,
-                        prayers: map,
-                    };
-
+                    // 2. Update in-memory cache
+                    let new_cache = jakim_api::build_cache(lat, lng, &data);
                     let engine = handle.state::<PrayerEngine>();
                     engine.update_cache(new_cache);
 

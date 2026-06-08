@@ -39,6 +39,8 @@ pub struct SolatResponse {
     pub zone: String,
     pub year: i32,
     pub month: String, // "JAN"
+    #[serde(default)]
+    pub month_number: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -46,8 +48,60 @@ pub struct JakimCache {
     pub zone: String,
     pub lat: f64,
     pub lng: f64,
-    pub month_hash: String, // e.g. "Jan-2026"
+    pub month_hash: String, // e.g. "6-2026" (numeric month-year, locale-independent)
     pub prayers: HashMap<String, PrayerDatapoint>,
+}
+
+/// Locale-independent cache key: "DD-MM-YYYY" (e.g. "08-06-2026")
+pub fn make_date_key(day: i32, month: u32, year: i32) -> String {
+    format!("{:02}-{:02}-{}", day, month, year)
+}
+
+/// Locale-independent month hash for cache freshness checks
+pub fn make_month_hash(month: u32, year: i32) -> String {
+    format!("{}-{}", month, year)
+}
+
+fn parse_month_abbr(month: &str) -> Option<u32> {
+    match month.to_uppercase().as_str() {
+        "JAN" => Some(1),
+        "FEB" => Some(2),
+        "MAR" => Some(3),
+        "APR" => Some(4),
+        "MAY" => Some(5),
+        "JUN" => Some(6),
+        "JUL" => Some(7),
+        "AUG" => Some(8),
+        "SEP" => Some(9),
+        "OCT" => Some(10),
+        "NOV" => Some(11),
+        "DEC" => Some(12),
+        _ => None,
+    }
+}
+
+pub fn resolve_month_number(data: &SolatResponse) -> u32 {
+    if data.month_number > 0 {
+        return data.month_number;
+    }
+    parse_month_abbr(&data.month).unwrap_or(1)
+}
+
+pub fn build_cache(lat: f64, lng: f64, data: &SolatResponse) -> JakimCache {
+    let month = resolve_month_number(data);
+    let mut map = HashMap::new();
+    for p in &data.prayers {
+        let key = make_date_key(p.day, month, data.year);
+        map.insert(key, p.clone());
+    }
+
+    JakimCache {
+        zone: data.zone.clone(),
+        lat,
+        lng,
+        month_hash: make_month_hash(month, data.year),
+        prayers: map,
+    }
 }
 
 // Global Zones Cache
@@ -125,33 +179,7 @@ pub fn save_cache(app: &AppHandle, lat: f64, lng: f64, data: &SolatResponse) -> 
         let _ = fs::create_dir_all(parent);
     }
 
-    // Convert Vec to Map with Date Key Construction
-    let month_capitalized = format!(
-        "{}{}",
-        data.month.chars().next().unwrap_or_default().to_uppercase(),
-        data.month
-            .chars()
-            .skip(1)
-            .collect::<String>()
-            .to_lowercase()
-    );
-
-    let mut map = HashMap::new();
-    for p in &data.prayers {
-        // Construct: "23-Jan-2026"
-        let key = format!("{:02}-{}-{}", p.day, month_capitalized, data.year);
-        map.insert(key, p.clone());
-    }
-
-    let month_hash = format!("{}-{}", month_capitalized, data.year);
-
-    let cache = JakimCache {
-        zone: data.zone.clone(),
-        lat,
-        lng,
-        month_hash,
-        prayers: map,
-    };
+    let cache = build_cache(lat, lng, data);
 
     let json = serde_json::to_string(&cache).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| e.to_string())?;
@@ -164,4 +192,58 @@ pub fn load_cache(app: &AppHandle) -> Option<JakimCache> {
     let path = get_cache_path(app)?;
     let content = fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_response() -> SolatResponse {
+        SolatResponse {
+            prayers: vec![PrayerDatapoint {
+                day: 8,
+                fajr: 0,
+                syuruk: 0,
+                dhuhr: 0,
+                asr: 0,
+                maghrib: 0,
+                isha: 0,
+                hijri: Some("1447-12-22".to_string()),
+            }],
+            status: None,
+            zone: "WLY01".to_string(),
+            year: 2026,
+            month: "JUN".to_string(),
+            month_number: 6,
+        }
+    }
+
+    #[test]
+    fn test_make_date_key_is_locale_independent() {
+        assert_eq!(make_date_key(8, 6, 2026), "08-06-2026");
+    }
+
+    #[test]
+    fn test_make_month_hash() {
+        assert_eq!(make_month_hash(6, 2026), "6-2026");
+    }
+
+    #[test]
+    fn test_build_cache_uses_numeric_keys() {
+        let cache = build_cache(3.14, 101.69, &sample_response());
+        assert_eq!(cache.month_hash, "6-2026");
+        assert!(cache.prayers.contains_key("08-06-2026"));
+        assert_eq!(
+            cache.prayers.get("08-06-2026").unwrap().hijri,
+            Some("1447-12-22".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_month_number_from_abbr() {
+        let mut data = sample_response();
+        data.month_number = 0;
+        data.month = "JUN".to_string();
+        assert_eq!(resolve_month_number(&data), 6);
+    }
 }

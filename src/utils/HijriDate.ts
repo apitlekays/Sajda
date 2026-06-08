@@ -3,7 +3,7 @@
  * Uses the Tabular Islamic Calendar algorithm for approximate conversion.
  */
 
-interface HijriDate {
+export interface HijriDate {
     year: number;
     month: number;
     day: number;
@@ -15,7 +15,7 @@ export interface KeyDateMessage {
 }
 
 /** Convert Gregorian date to approximate Hijri date */
-function gregorianToHijri(year: number, month: number, day: number): HijriDate {
+export function gregorianToHijri(year: number, month: number, day: number): HijriDate {
     const a = Math.floor((14 - month) / 12);
     const y = year + 4800 - a;
     const m = month + 12 * a - 3;
@@ -53,6 +53,22 @@ function daysUntilHijri(current: HijriDate, targetMonth: number, targetDay: numb
     }
 
     return targetJdn - todayJdn;
+}
+
+export function getHijriForDate(date: Date): HijriDate {
+    return gregorianToHijri(date.getFullYear(), date.getMonth() + 1, date.getDate());
+}
+
+/**
+ * Parse JAKIM API hijri string (YYYY-MM-DD) into components.
+ * Returns null if the format is invalid.
+ */
+export function parseJakimHijri(hijriStr: string): HijriDate | null {
+    const parts = hijriStr.split("-").map(Number);
+    if (parts.length !== 3) return null;
+    const [year, month, day] = parts;
+    if (year < 1300 || month < 1 || month > 12 || day < 1 || day > 30) return null;
+    return { year, month, day };
 }
 
 /**

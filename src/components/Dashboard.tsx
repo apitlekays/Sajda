@@ -11,9 +11,9 @@ import { useUpdateStore } from "../store/UpdateStore";
 import { DashboardSkeleton } from "./DashboardSkeleton";
 import { Settings, X, Volume2, VolumeX, Bell, Check, Navigation, Play, Clock, Plus, BookOpen, Quote, AlertTriangle, Heart, Info, LogOut, Moon, BarChart2, Download, RefreshCw, Power } from "lucide-react";
 import { ZONE_MAPPING } from "../utils/ZoneData";
-import { getIslamicKeyDateMessages } from "../utils/HijriDate";
+import { getIslamicKeyDateMessages, getHijriForDate, parseJakimHijri } from "../utils/HijriDate";
 import { playToggleSound, playCheckSound } from "../utils/UISounds";
-import { HIJRI_MONTHS, getPrayerDisplayName, PrayerKey } from "../utils/MalayDictionary";
+import { getPrayerDisplayName, PrayerKey, formatHijriDate } from "../utils/MalayDictionary";
 import {
     trackAudioModeChanged,
     trackPrayerChecked,
@@ -218,19 +218,13 @@ export const Dashboard = () => {
         return s[(v - 20) % 10] || s[v] || s[0];
     };
 
-    const renderHijri = (hijriStr: string) => {
-        if (!hijriStr) return null;
-        try {
-            const [y, m, d] = hijriStr.split("-").map(Number);
-            const monthName = HIJRI_MONTHS[m - 1] || "";
-            return (
-                <>
-                    {d} {monthName} {y}
-                </>
-            );
-        } catch (e) {
-            return hijriStr;
+    const getDisplayHijri = () => {
+        const jakimHijri = todayTimes?.hijri ? parseJakimHijri(todayTimes.hijri) : null;
+        if (jakimHijri) {
+            return formatHijriDate(jakimHijri.year, jakimHijri.month, jakimHijri.day);
         }
+        const fallback = getHijriForDate(new Date());
+        return formatHijriDate(fallback.year, fallback.month, fallback.day);
     };
 
     const renderGregorian = () => {
@@ -800,7 +794,7 @@ export const Dashboard = () => {
                 </div>
             </div>
 
-            {/* Top Bar: Settings (Left) & Logo (Right) */}
+            {/* Top Bar: Settings */}
             <div className="absolute top-3 left-3 z-20">
                 <button
                     onClick={() => setIsSettingsOpen(true)}
@@ -814,41 +808,13 @@ export const Dashboard = () => {
                 </button>
             </div>
 
-            {/* Logo - Draping effect */}
-            <div className="absolute top-2 right-3 w-14 z-10">
-                <img
-                    src="/mapimlogo.webp"
-                    alt="Logo"
-                    className="w-full h-auto drop-shadow-md opacity-90 hover:opacity-100 transition-opacity rounded-b-md cursor-pointer"
-                    onClick={() => {
-                        setTimeout(async () => {
-                            try {
-                                const reminder = await triggerNewReminder();
-                                const hasPermission = await isPermissionGranted();
-                                if (hasPermission) {
-                                    const MAX_BODY = 100;
-                                    let body = reminder.body;
-                                    if (body.length > MAX_BODY) {
-                                        body = body.substring(0, MAX_BODY).trim() + "...";
-                                    }
-                                    sendNotification({ title: reminder.title, body });
-                                }
-                                setTimeout(() => openModal(), 500);
-                            } catch (err) {
-                                console.error("Easter egg reminder failed:", err);
-                            }
-                        }, 10000);
-                    }}
-                />
-            </div>
-
             {/* Main Content - Show skeleton while loading */}
             {todayTimes ? (
                 <>
                     {/* Header / Date */}
                     <div className="text-center space-y-1 font-buda mt-6">
                         <h2 className="text-xl font-bold text-foreground tracking-wide leading-tight">
-                            {renderHijri(todayTimes.hijri || "")}
+                            {getDisplayHijri()}
                         </h2>
                         <p className="text-xs text-muted-foreground font-semibold uppercase tracking-widest opacity-90">
                             {renderGregorian()}

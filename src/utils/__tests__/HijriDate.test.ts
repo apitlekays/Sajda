@@ -1,7 +1,31 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getIslamicKeyDateMessages, KeyDateMessage } from '../HijriDate';
+import { getIslamicKeyDateMessages, getHijriForDate, parseJakimHijri, KeyDateMessage } from '../HijriDate';
 
 describe('HijriDate', () => {
+    describe('parseJakimHijri', () => {
+        it('parses YYYY-MM-DD from JAKIM API', () => {
+            expect(parseJakimHijri('1447-12-22')).toEqual({
+                year: 1447,
+                month: 12,
+                day: 22,
+            });
+        });
+
+        it('returns null for invalid strings', () => {
+            expect(parseJakimHijri('24-11-1447')).toBeNull();
+            expect(parseJakimHijri('')).toBeNull();
+        });
+    });
+
+    describe('getHijriForDate', () => {
+        it('returns 22 Zulhijjah for 8 June 2026', () => {
+            const hijri = getHijriForDate(new Date('2026-06-08'));
+            expect(hijri.year).toBe(1447);
+            expect(hijri.month).toBe(12);
+            expect(hijri.day).toBe(22);
+        });
+    });
+
     describe('getIslamicKeyDateMessages', () => {
         it('should return an array', () => {
             const messages = getIslamicKeyDateMessages();
