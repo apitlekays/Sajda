@@ -57,6 +57,11 @@ fn to_mono_digits(input: &str) -> String {
         .collect()
 }
 
+/// True when the calendar day has changed since the last tick (not on first tick).
+fn is_day_rollover(previous: Option<NaiveDate>, current: NaiveDate) -> bool {
+    previous.is_some_and(|prev| prev != current)
+}
+
 pub fn start_ticker(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut interval = interval(Duration::from_secs(1));
@@ -109,12 +114,19 @@ pub fn start_ticker(app: AppHandle) {
                 let _ = app.emit("system-wake", ());
             }
 
-            // Reset triggered set at midnight
+            // Reset triggered set at midnight / day rollover
             let current_date = now.date_naive();
             if last_date != Some(current_date) {
+                let day_rolled = is_day_rollover(last_date, current_date);
                 triggered_today.clear();
                 last_date = Some(current_date);
-                println!("Rust: New day detected, reset triggered prayers");
+                if day_rolled {
+                    println!("Rust: New day detected, reset triggered prayers");
+                    if let Some(schedule) = engine.get_today_schedule() {
+                        let _ = app.emit("prayers-refreshed", &schedule);
+                        println!("Rust: Emitted prayers-refreshed for new day");
+                    }
+                }
             }
 
             // 1. TRAY & FRONTEND UPDATE
@@ -352,6 +364,25 @@ mod tests {
         assert_eq!(result.chars().next().unwrap(), '\u{1D7F6}');
         // Last char should be monospace 9 (U+1D7FF)
         assert_eq!(result.chars().last().unwrap(), '\u{1D7FF}');
+    }
+
+    #[test]
+    fn test_is_day_rollover_first_tick() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 8).unwrap();
+        assert!(!is_day_rollover(None, today));
+    }
+
+    #[test]
+    fn test_is_day_rollover_same_day() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 8).unwrap();
+        assert!(!is_day_rollover(Some(today), today));
+    }
+
+    #[test]
+    fn test_is_day_rollover_midnight() {
+        let yesterday = NaiveDate::from_ymd_opt(2026, 6, 8).unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 6, 9).unwrap();
+        assert!(is_day_rollover(Some(yesterday), today));
     }
 
     #[test]
